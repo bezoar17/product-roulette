@@ -36,12 +36,12 @@ def productRoulette():
 		this function shows the name of product or sets current_product to None
 		"""
 		global logger
-		nonlocal current_product,db,cursor
+		nonlocal current_product,db,cursor,current_product_name
 		logger.info('Fn: showProduct() called with valid_choice=%d',valid_choice)
 		
 		if valid_choice==0:
 			logger.info('Returning to menu, user choice was invalid')
-			print(current_product)
+			print(current_product_name)
 			logger.info('Fn: showProduct() exited')
 			return
 		
@@ -51,13 +51,14 @@ def productRoulette():
 			cursor.execute('''SELECT product_name FROM product_info_table WHERE product_id=?''',(current_product,))
 			logger.info('DB Query: SUCCESS')
 			
-			pr_value=cursor.fetchone()[0]
-			print(pr_value)
-			logger.info('current product value set to %s',pr_value)
+			current_product_name=cursor.fetchone()[0]
+			print(current_product_name)
+			logger.info('current product value set to %s',current_product_name)
 		else:
 			#update product failed
 			logger.info('Current product being set to None')
 			current_product=None
+			current_product_name=None
 		logger.info('Fn: showProduct() exited')
 	
 	def update_new_input():
@@ -340,6 +341,7 @@ def productRoulette():
 	new_set_d=None
 	user_id=None
 	current_product=None
+	current_product_name=None
 	n_users=None
 	n_users_lset=None
 	n_users_dset=None
