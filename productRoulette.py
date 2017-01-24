@@ -36,25 +36,29 @@ def productRoulette():
 		this function shows the name of product or sets current_product to None
 		"""
 		global logger
-		nonlocal current_product,db,cursor
+		nonlocal current_product,db,cursor,current_product_name
 		logger.info('Fn: showProduct() called with valid_choice=%d',valid_choice)
+		
 		if valid_choice==0:
 			logger.info('Returning to menu, user choice was invalid')
-			print(current_product)
+			print(current_product_name)
 			logger.info('Fn: showProduct() exited')
 			return
-		if not update_current_product():			#true is function was a success(i.e returned 0)
+		
+		if not update_current_product():			#true if function was a success(i.e returned 0)
 			#get product name from db
 			logger.info('DB Query: selecting product name for product_id %d',current_product)
 			cursor.execute('''SELECT product_name FROM product_info_table WHERE product_id=?''',(current_product,))
 			logger.info('DB Query: SUCCESS')
-			pr_value=cursor.fetchone()[0]
-			print(pr_value)
-			logger.info('current product value set to %s',pr_value)
+			
+			current_product_name=cursor.fetchone()[0]
+			print(current_product_name)
+			logger.info('current product value set to %s',current_product_name)
 		else:
 			#update product failed
 			logger.info('Current product being set to None')
 			current_product=None
+			current_product_name=None
 		logger.info('Fn: showProduct() exited')
 	
 	def update_new_input():
@@ -62,6 +66,7 @@ def productRoulette():
 		global logger
 		nonlocal current_set_l, current_set_d, current_product, menu_val,new_set_l,new_set_d
 		logger.info('Fn: update_new_input() called with menu_val: %s',menu_val)
+		
 		if menu_val == 'y':
 			current_set_l.add(current_product)
 			new_set_l.add(current_product)
@@ -70,12 +75,13 @@ def productRoulette():
 			current_set_d.add(current_product)
 			new_set_d.add(current_product)
 			logger.info('%d added to dislike set of current user, dislike set size:%d',current_product,len(current_set_d))
+		
 		logger.info('Fn: update_new_input() exited')
 	
 	def push_user_data_to_db():
 		"""
 		Push the new like/dislike data collected for the current user to the DB
-		This function is called just before exiting the application 
+		This function is called once,just before exiting the application 
 		"""
 		# iterate over each in new like and dislike set and add to the likes table, only if any data has been collected
 		global logger
@@ -98,16 +104,16 @@ def productRoulette():
 				cursor.execute('''INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,-1)''', (user_id,elem))
 				logger.info('DB Query: SUCCESS')
 
-			logger.info('DB COmmit: commiting to db')
+			logger.info('DB Commit: commiting to db')
 			db.commit()
-			logger.info('DB COmmit: SUCCESS')
+			logger.info('DB Commit: SUCCESS')
 		logger.info('Fn: push_user_data_to_db() exited')
 	
 	def get_user_id():
 		"""
 		Brief: Get the unique user_id and the like & dislike set of the user
 		
-		Description: 
+		Description:
 		Initialize the user's like and dislike sets
 		Check if user already exists , if NO: add user to DB,get unique id
 		if YES: populate the user's like and dislike sets
@@ -120,40 +126,45 @@ def productRoulette():
 		new_set_l=set()
 		current_set_d=set()
 		new_set_d=set()
+		
 		logger.info('DB Query: Get id for email:%s and persona:%s',user_email,user_persona)
 		cursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
-		# return will be None if user was not present and unique user_id if user was present
 		logger.info('DB Query: SUCCESS')
 		user_id=cursor.fetchone() 
 		
 		if user_id==None:
-			#2) if user not present :: add user to db and get unique id
-			#insert user
+			# user not present :: add user to db and get unique id
+			
 			logger.info('User id was not found, making another query')
+			
+			#insert user
 			logger.info('DB Query: inserting user with email:%s and persona:%s',user_email,user_persona)
 			cursor.execute('''INSERT INTO user_info_table(email_id,persona) VALUES(?,?)''',(user_email,user_persona))
 			logger.info('DB Query: SUCCESS')
 			
+			#select user
 			logger.info('DB Query: getting id for user with email:%s and persona:%s',user_email,user_persona)
 			cursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
 			logger.info('DB Query: SUCCESS')
-			# or user_id=cursor.lastrowid , have to try 
 			user_id=cursor.fetchone()[0]
 			logger.info('User id fetched %d',user_id)
-			logger.info('DB COmmit: commiting to db')
+			
+			logger.info('DB Commit: commiting to db')
 			db.commit()
-			logger.info('DB COmmit: SUCCESS')
+			logger.info('DB Commit: SUCCESS')
 		else:
 			#user already present ,update user's like and dislike profile
-			# Same:		for elem in cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(user_id,)):
-			# 				current_set_l.add(elem[0])
 			user_id=user_id[0] #fetchone returns a tuple, so in this case first element is what we need
 			logger.info('User id fetched %d',user_id)
+			
+			#like set
 			logger.info('DB Query: Selecting the like set for user %d',user_id)
 			cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(user_id,))
 			logger.info('DB Query: SUCCESS')
 			current_set_l=set([i[0] for i in cursor.fetchall()])
 			logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
+			
+			#dislike set
 			logger.info('DB Query: Selecting the dislike set for user %d',user_id)
 			cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=-1''',(user_id,))
 			logger.info('DB Query: SUCCESS')
@@ -175,6 +186,7 @@ def productRoulette():
 			logger.info('No previous dataset of users,show trending products')
 			probable_set=set((trending_set - (current_set_d | current_set_l)))
 			logger.info('Probable set is %s',repr(probable_set))
+			
 			if len(probable_set) <1:
 				print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
 				logger.info('Fn: update_current_product() exited with return value 1')
@@ -195,30 +207,31 @@ def productRoulette():
 					calc_val+= len(n_users_lset[elem] & current_set_l)
 					calc_val+= len(n_users_dset[elem] & current_set_d)
 					logger.info('The agreement total for user %d is %d',elem,calc_val)
+					
 					calc_val-= len(n_users_lset[elem] & current_set_d)
 					calc_val-= len(n_users_dset[elem] & current_set_l)
 					logger.info('The numerator value for user %d is %d',elem,calc_val)
+					
 					logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
 					calc_val/= (len(current_set_d)+len(current_set_l))
 					logger.info('The similarity value for user %d is %.4f',elem,calc_val)
 					n_users_jset[elem]=calc_val;
 
-				#find product value
 				#for all nearest neighbours in descending order of similarity index
 				nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
 				logger.info('Nearest users order is %s',repr(nearest_order))
 				for elem in nearest_order:
-					#try their like set
+					# try their like set
 					probable_set=set((n_users_lset[elem] - (current_set_d | current_set_l)))
 					logger.info('Probable set with user %d is %s',elem,repr(probable_set))
 					if len(probable_set)>0:
-						current_product=random.sample(probable_set,1)[0]
+						current_product=random.sample(probable_set,1)[0] #choose any one from nearest user's like set
 						logger.info('current_product is set to %d',current_product)
 						logger.info('Fn: update_current_product() exited with return value 0')
 						return 0
-				#if reached here, means nested loop anywhere we could not find a product,show user more products from the trending and random set 
-				# for staring users very low predictive products will be shown
-				# show a random product to build user profile
+				
+				#if reached here, means in loop anywhere we could not find a product,show user more products from the random set 
+				# show a random product to build better user profile
 				logger.info('NOW showing random product, no user product matched')
 				probable_set=set((random_set - (current_set_d | current_set_l)))
 				logger.info('Probable set for random product is %s',repr(probable_set))
@@ -296,6 +309,7 @@ def productRoulette():
 			logger.info('No previous users')
 			logger.info('Fn: populate_previous_data() exited')
 			return
+		
 		#iterate and populate user's like and dislike sets
 		logger.info('Starting selection of all users like and dislike sets')
 		for elem in n_users:
@@ -319,21 +333,15 @@ def productRoulette():
 	''' FUNCTION DEFINITIONS END'''
 
 	#  START of APPLICATION
-	global logger,logging
-	logger.info('Application Started')
-	print("Welcome to Product Roulette")
-	#connect to db
-	logger.info('Connecting to db') 
-	db=sqlite3.connect('example.db')
-	cursor=db.cursor()
-	logger.info('Connected to db')
 	#define and declare the set values
+	global logger,logging	
 	current_set_l=None
 	new_set_l=None
 	current_set_d=None
 	new_set_d=None
 	user_id=None
 	current_product=None
+	current_product_name=None
 	n_users=None
 	n_users_lset=None
 	n_users_dset=None
@@ -342,43 +350,58 @@ def productRoulette():
 	random_set=None
 	# true_sample_set=None  # for diversity
 
+	logger.info('Application Started')
+	print("Welcome to Product Roulette")
+	#connect to db
+	logger.info('Connecting to example.db')
+	db=sqlite3.connect('example.db')
+	cursor=db.cursor()
+	logger.info('Connected to db')
+	
+
 	logger.info('Taking user input')
 	#get user input
 	user_email=input('Enter your email-id : ')
 	user_persona=input('Enter your persona : ')
 	logger.info('User email:\'%s\' and persona:\'%s\'',user_email,user_persona)
 	
+	# user id along with like/dislike data
 	get_user_id()
+	# all previous user input data 
 	populate_previous_data()
+	
+	# variable to check if user input is valid
 	valid_choice=1
 	while(1):
 		showProduct(valid_choice)
-		#if error happened in showProduct,current_product is set to none
+		#if error happened in showProduct,current_product is set to None
 		if current_product == None:
 			logger.info('current_product was set to None')
-			push_user_data_to_db()
+			push_user_data_to_db() #before exit , users input are pushed to Db
 			break
 		logger.info('Product shown is :%d',current_product)
 		menu_val=input('Press \'y\' if you like product, \'n\' if you don;t like the product and \'e\' to exit application : ')
 		if(menu_val =='e'):
-			logger.info('User entered exit command')
-			logger.info('User entered valid choice')
+			logger.info('User entered valid choice:exit command')
 			valid_choice=1
-			push_user_data_to_db()
+			push_user_data_to_db() #before exit , users input are pushed to Db
 			break
 		elif(menu_val =='y' or menu_val =='n'):
 			logger.info('User entered valid choice')
 			valid_choice=1
-			update_new_input()
+			update_new_input() # user input added to newset(user's inputs in this session) and user's overall like/dislike set
 		else:
 			logger.info('User entered invalid choice')
 			valid_choice=0
 			print('Please enter a valid choice')
+	
 	logger.info('Exiting application')
 	print('See you later! Alligator!')
+	
 	db.commit() #make sure any pending transactions are comitted
 	db.close() #close db
 	logger.info('DB committed and closed')
+	
 	logger.info('Exited application')
 	logging.shutdown()
 	return
