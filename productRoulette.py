@@ -31,9 +31,17 @@ def productRoulette():
 
 	def showProduct(valid_choice):
 		"""
-		Show the name of current_product by a DB call
-		Based on the success or failure of update_current_product() function call, 
-		this function shows the name of product or sets current_product to None
+		Brief: Call update on current_product and then show the name of current_product
+		
+		Args: valid_choice
+		
+		Description: 
+			If function is called with valid_choice=0(happens after wrong user input)
+			the function just shows the name for the current_product(id)
+
+			When called with valid_choice=1, it calls update_current_product().
+			IF the update function is successful,it prints the name of current_product
+			ELSE sets current_product=None
 		"""
 		global logger
 		nonlocal current_product,db,cursor,current_product_name
@@ -79,15 +87,12 @@ def productRoulette():
 		logger.info('Fn: update_new_input() exited')
 	
 	def push_user_data_to_db():
-		"""
-		Push the new like/dislike data collected for the current user to the DB
-		This function is called once,just before exiting the application 
-		"""
-		# iterate over each in new like and dislike set and add to the likes table, only if any data has been collected
+		"""	Push the new like/dislike data collected for the current user to the DB	"""
 		global logger
 		nonlocal db,cursor,user_id,new_set_l,new_set_d
 		logger.info('Fn: push_user_data_to_db() called')
 		
+		# if no data has been collected,exit 
 		if(len(new_set_l)+len(new_set_d)<1):
 			logger.info('size of user like dislike set is 0')
 			logger.info('Fn: push_user_data_to_db() exited')
@@ -114,64 +119,70 @@ def productRoulette():
 		Brief: Get the unique user_id and the like & dislike set of the user
 		
 		Description:
-		Initialize the user's like and dislike sets
-		Check if user already exists , if NO: add user to DB,get unique id
-		if YES: populate the user's like and dislike sets
+			If user_persona is not None(indicates user has to be added to DB) when this function is called,
+			the user is added to the DB and unique user id is fetched.
+
+			If user_persona is None(indicates user has to be checked in DB) when this function is called,
+			user email is checked in DB, if not found user_id is set to None and function returns.
+			and if found, the like & dislike set for the user are also updated from DB.
 		"""
 		global logger
 		nonlocal user_email,user_persona,user_id,current_set_l,current_set_d,db,cursor,new_set_l,new_set_d
-		logger.info('Fn: get_user_id() called')
-		
 		current_set_l=set()
 		new_set_l=set()
 		current_set_d=set()
 		new_set_d=set()
-		
-		logger.info('DB Query: Get id for email:%s and persona:%s',user_email,user_persona)
-		cursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
-		logger.info('DB Query: SUCCESS')
-		user_id=cursor.fetchone() 
-		
-		if user_id==None:
-			# user not present :: add user to db and get unique id
+
+		logger.info('Fn: get_user_id() called')
+		if user_persona == None:
+			logger.info('Checking if user exists')
 			
-			logger.info('User id was not found, making another query')
+			logger.info('DB Query: Select user id and persona for email : %s',user_email)
+			cursor.execute('''SELECT user_id,persona FROM user_info_table WHERE email_id=?''',(user_email,))
+			user_selection=cursor.fetchone()
+			logger.info('DB QUery: Success, selection is %s',repr(user_selection))
 			
-			#insert user
-			logger.info('DB Query: inserting user with email:%s and persona:%s',user_email,user_persona)
-			cursor.execute('''INSERT INTO user_info_table(email_id,persona) VALUES(?,?)''',(user_email,user_persona))
-			logger.info('DB Query: SUCCESS')
-			
-			#select user
-			logger.info('DB Query: getting id for user with email:%s and persona:%s',user_email,user_persona)
-			cursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
-			logger.info('DB Query: SUCCESS')
-			user_id=cursor.fetchone()[0]
-			logger.info('User id fetched %d',user_id)
-			
-			logger.info('DB Commit: commiting to db')
-			db.commit()
-			logger.info('DB Commit: SUCCESS')
+			if user_selection==None:
+				logger.info('User was not found, set user_id to None and exit')
+				user_id=None
+				logger.info('Fn: get_user_id() exited')
+				return 
+			else:
+				#user already present ,update user's like and dislike profile
+				user_id=user_selection[0] #fetchone returns a tuple, so in this case first element is what we need
+				user_persona=user_selection[1]
+				logger.info('User found in db with id %d and persona:%s',user_id,user_persona)
+				
+				#like set
+				logger.info('DB Query: Selecting the like set for user %d',user_id)
+				cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(user_id,))
+				logger.info('DB Query: SUCCESS')
+				current_set_l=set([i[0] for i in cursor.fetchall()])
+				logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
+				
+				#dislike set
+				logger.info('DB Query: Selecting the dislike set for user %d',user_id)
+				cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=-1''',(user_id,))
+				logger.info('DB Query: SUCCESS')
+				current_set_d=set([i[0] for i in cursor.fetchall()])
+				logger.info('DisLike set for user %d is %s',user_id,repr(current_set_d))
+
 		else:
-			#user already present ,update user's like and dislike profile
-			user_id=user_id[0] #fetchone returns a tuple, so in this case first element is what we need
-			logger.info('User id fetched %d',user_id)
+			logger.info('Adding new user to user info table')
 			
-			#like set
-			logger.info('DB Query: Selecting the like set for user %d',user_id)
-			cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(user_id,))
-			logger.info('DB Query: SUCCESS')
-			current_set_l=set([i[0] for i in cursor.fetchall()])
-			logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
+			logger.info('DB Query : Insert user with email: %s and persona :%s',user_email,user_persona)
+			cursor.execute('''INSERT INTO user_info_table(email_id,persona) VALUES(?,?)''',(user_email,user_persona))
+			logger.info('DB Query: Success')
 			
-			#dislike set
-			logger.info('DB Query: Selecting the dislike set for user %d',user_id)
-			cursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=-1''',(user_id,))
-			logger.info('DB Query: SUCCESS')
-			current_set_d=set([i[0] for i in cursor.fetchall()])
-			logger.info('DisLike set for user %d is %s',user_id,repr(current_set_d))
+			logger.info('DB Query: Select the user id form the user info table')
+			cursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
+			user_id=cursor.fetchone()[0]
+			logger.info('DB Query: Success , user id is %d',user_id)
+			
+			db.commit()
+			logger.info('DB Commit:Successful')
 		logger.info('Fn: get_user_id() exited')
-		
+	
 	def update_current_product():
 		"""
 		Returns 0 for a successful attempt, else returns 1 and prints the error message
@@ -264,7 +275,7 @@ def productRoulette():
 				
 	def populate_previous_data():
 		""" 
-		Get the list of previous users, their like/dislike set and populate trending and random sets
+		Get the list of previous users, their like/dislike set and populate the trending and random sets of products. 
 		"""
 		global logger
 		nonlocal db,cursor,n_users_lset,n_users_dset,n_users_jset,n_users,trending_set,user_persona,random_set,user_id
@@ -300,9 +311,10 @@ def productRoulette():
 		cursor.execute('''SELECT user_id FROM user_info_table WHERE persona=?''',(user_persona,))
 		logger.info('DB Query: SUCCESS')
 		n_users=[i[0] for i in cursor.fetchall()] # converting [(1,), (2,), (3,)] to [1, 2, 3]
-		n_users.remove(user_id)
 		logger.info('Users are LEN:%d and list is :%s',len(n_users),repr(n_users))
-
+		if user_id in n_users:
+			n_users.remove(user_id)
+		
 		#if no users found, exit 
 		if len(n_users)<1:
 			print('Looks like you are first in this category!!')
@@ -330,11 +342,21 @@ def productRoulette():
 			n_users_jset[elem]=None
 		logger.info('Fn: populate_previous_data() exited')
 
+	def print_personas():
+		''' Print all the different persona's of products present in the product_info_table '''
+		nonlocal cursor
+		cursor.execute('''SELECT DISTINCT persona from product_info_table''')
+		product_personas=set([i[0] for i in cursor.fetchall()])
+		#  print 3 personas in a line
+		# it = iter(product_personas)
+		for elem in product_personas:
+			print(elem)
+
 	''' FUNCTION DEFINITIONS END'''
 
 	#  START of APPLICATION
 	#define and declare the set values
-	global logger,logging	
+	global logger,logging
 	current_set_l=None
 	new_set_l=None
 	current_set_d=None
@@ -360,13 +382,21 @@ def productRoulette():
 	
 
 	logger.info('Taking user input')
-	#get user input
 	user_email=input('Enter your email-id : ')
-	user_persona=input('Enter your persona : ')
-	logger.info('User email:\'%s\' and persona:\'%s\'',user_email,user_persona)
-	
-	# user id along with like/dislike data
+	user_persona=None
 	get_user_id()
+	if user_id==None:
+		#  ask for persona and add to db 
+		print('Looks like you are here for the first time.')
+		user_persona=input('Enter your persona (for suggestions press \'x\'):')
+		if user_persona=='x':
+			print_personas()
+			user_persona=input('Enter your persona :')
+		get_user_id()
+		print('Registered you ! Getting products for your persona')
+	else:
+		print('Found you ! Getting products for your persona:',user_persona)
+
 	# all previous user input data 
 	populate_previous_data()
 	
