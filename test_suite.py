@@ -1,6 +1,7 @@
 import sqlite3
 import product_roulette as pr
 import populate_db as popdb
+import csv
 
 '''GLOBALS ''' 
 
@@ -9,8 +10,6 @@ n_users_lset_test=dict() # dict of l sets
 n_users_dset_test=dict() # dict of d sets
 n_users_sgset_test=dict() # dict of suggestionsets 
 n_users_rset_test=dict() # result dict
-
-# testing parameters
 
 '''GLOBALS ''' 
 
@@ -46,53 +45,80 @@ def populate_user_details():
 		n_users_sgset_test[elem[0]]=set()	
 
 ''' FUNCTION DECLARATIONS'''
+csvresults=list()
+csvresults.append(['model_no','iteration','user_email','likes','dislikes','hits','oops','suggestions_given','suggestions_value'])
 
-popdb.start()
+# testing parameters
+model_no=1
+iterations=25
+nsuggestions_peruser=30
 
-# use the test db and iterate over each user
-db=sqlite3.connect('test.db')
-cursor=db.cursor()
-populate_user_details()
+total_hits=0
+total_suggestions=0
+previous_avg=0
+avg_hit_per_suggestion=0
+should_exit=0
+
+for iterval in range(iterations):
+	
+	if should_exit == 1:
+		break;
+	popdb.start()
+
+	# use the test db and iterate over each user
+	db=sqlite3.connect('test.db')
+	cursor=db.cursor()
+	populate_user_details()
 
 
-for elem in n_users_test:
-	pr.start()
-	pr.set_user(elem[1],elem[2]) # will set the internal variable for user id also 
-	pr.populate_previous_data()
-	pr.valid_choice=1
+	for elem in n_users_test:
+		pr.start(model_no)
+		pr.set_user(elem[1],elem[2]) # will set the internal variable for user id also 
+		pr.populate_previous_data()
+		pr.valid_choice=1
+		
+		hits_peruser=0
+		oops_peruser=0
+		
+		# each user gives 10 inputs
+		for i in range(nsuggestions_peruser):
+			suggestion=pr.getProduct() # basically calls showproduct and returns current_product id
+			if suggestion == None:
+				# print('None suggested')
+				pass
+				# continue
+				# pr.set_user_input(0)
+				# break
+			# send input to pr
+			if suggestion in n_users_lset_test[elem[0]]:
+				pr.set_user_input(1)
+				# print("!!! HIT !!!")
+				hits_peruser+=1
+			elif suggestion in n_users_dset_test[elem[0]]:
+				pr.set_user_input(-1)
+				# print("!!! OOPS !!!")
+				oops_peruser+=1
+			n_users_sgset_test[elem[0]].add(suggestion)
+		pr.set_user_input(0) # this will end the pr and call push data to db 
+		# we can push the complete data for this user from test to train also
+		pr.end()
 
-	# each user gives 10 inputs
-	for i in range(60):
-		suggestion=pr.getProduct() # basically calls showproduct and returns current_product id
-		if suggestion == None : 
-			continue
-			pr.set_user_input(0)
-			break
-		# send input to pr
-		if suggestion in n_users_lset_test[elem[0]]:
-			pr.set_user_input(1)
-			print("!!! HIT !!!") 
-		elif suggestion in n_users_dset_test[elem[0]]:
-			pr.set_user_input(-1)
-			print("!!! OOPS !!!")
-		n_users_sgset_test[elem[0]].add(suggestion)
-	pr.set_user_input(0) # this will end the pr and call push data to db 
-	# we can push the complete data for this user from test to train also
-	pr.end()
+		#calculate result for user
+		n_users_rset_test[elem[0]]=(hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]))
+		# print('result for:',elem[0],':',n_users_rset_test[elem[0]])
+		csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser])
 
-val1=0
-val2=0
-val3=0
-# find the result values
-for elem in n_users_test:
+		#total calc
+		total_hits+=hits_peruser
+		total_suggestions+=len(n_users_sgset_test[elem[0]])
+		
+	previous_avg=avg_hit_per_suggestion
+	avg_hit_per_suggestion=total_hits/total_suggestions
 
-	calc_val=0
+	print('Iter',iterval,'>> diff:',abs(avg_hit_per_suggestion-previous_avg))
 
-	val1+= len(n_users_sgset_test[elem[0]] & n_users_lset_test[elem[0]])
-	val2+= len(n_users_sgset_test[elem[0]] & n_users_dset_test[elem[0]])
-	val3+= len(n_users_sgset_test[elem[0]])
-	calc_val=(val1-val2)/val3
-	print('result for:',elem,':',val1,val2,val3)
-	n_users_rset_test[elem[0]]=(val1,val2,val3,calc_val)
-
-print('Overall results:',val1,val2,val3)
+with open('results.csv', 'w', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerows(csvresults)
+print('Completed>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+print('AVG:',avg_hit_per_suggestion)

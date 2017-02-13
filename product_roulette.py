@@ -47,7 +47,7 @@ menu_val=None
 db=None
 cursor=None
 all_suggestions=None
-
+model_value=None
 ''' GLOBALS FOR MODULE '''
 
 ''' FUNCTION DEFINITIONS START'''
@@ -208,7 +208,16 @@ def get_user_id():
 	logger.info('Fn: get_user_id() exited')
 
 def update_current_product():
-		return trial4()
+		if model_value==1:
+			return trial1()
+		elif model_value==2:
+			return trial2()
+		elif model_value==3:
+			return trial3()
+		elif model_value==4:
+			return trial4()
+		else:
+			return trial4()
 
 def populate_previous_data():
 		""" 
@@ -310,7 +319,7 @@ def populate_previous_data():
 		templist=[(elem,len(n_pr_lset[elem])) for elem in n_products]
 		templist.sort(key=lambda tup: tup[1],reverse=True)
 		logger.info('templist is %s',repr(templist))
-		fallback_set=set([i[0] for i in templist[0:40]])
+		fallback_set=set([i[0] for i in templist[0:30]])
 		logger.info('Fallback set LEN:%d and set is :%s',len(fallback_set),repr(fallback_set))
 
 		logger.info('Fn: populate_previous_data() exited')
@@ -349,7 +358,7 @@ def getProduct():
 	showProduct()
 	return current_product
 
-def start():
+def start(model_no=4):
 	global db,cursor,logger,handler
 
 	#connect to db
@@ -357,6 +366,7 @@ def start():
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
 	logger.info('Connected to db')
+	model_value=model_no
 
 def end():
 	global db,cursor
