@@ -32,17 +32,12 @@ def populate_products():
 	for row in reader:
 		product_values.append((row['product_name'],row['persona'],row['trending']))
 	
+	#add product info to train and test db
 	insert_many_to_db('train.db','INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values)
-	# db=sqlite3.connect('train.db')
-	# cursor=db.cursor()
-	# cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values) # add products to train db
-	# db.commit()
-	# db.close()
-
+	insert_many_to_db('test.db','INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values)
+	
 	db=sqlite3.connect('test.db')
 	cursor=db.cursor()
-	cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values) # add products to test db
-	db.commit()
 	cursor.execute('SELECT product_id,product_name FROM product_info_table')			# build the product's name -> id dictionary
 	for i in cursor.fetchall():
 		productids[i[1]]=i[0]
@@ -66,34 +61,21 @@ def populate_trts(train_set_size):
 	test_userids=[i[0] for i in all_users[train_set_size:]]
 
 	insert_many_to_db('train.db','INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
-	#db=sqlite3.connect('train.db')
-	#cursor=db.cursor()
-	#cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
-	#db.commit()
-	#db.close()
-	
 	insert_many_to_db('test.db','INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
-	# db=sqlite3.connect('test.db')
-	# cursor=db.cursor()
-	# cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
-	# db.commit()
-	# db.close()
-
+	
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
 	cursor.execute('SELECT user_id,email_id FROM user_info_table')
-	
 	for i in cursor.fetchall():
-		train_userids_back[useremailtoid[i[1]]]=i[0]
+		train_userids_back[useremailtoid[i[1]]]=i[0]			#  build the user's original id ->  training set id dictionary
 	db.commit()
 	db.close()
 
 	db=sqlite3.connect('test.db')
 	cursor=db.cursor()
 	cursor.execute('SELECT user_id,email_id FROM user_info_table')
-	
 	for i in cursor.fetchall():
-		test_userids_back[useremailtoid[i[1]]]=i[0]
+		test_userids_back[useremailtoid[i[1]]]=i[0]				#  build the user's original id ->  testing set id dictionary
 	db.commit()
 	db.close()
 	
@@ -101,7 +83,7 @@ def populate_trts(train_set_size):
 	train_userinputs=list()
 	test_userinputs=list()
 
-	for row in reader:
+	for row in reader:											# build the user inputs list to add to train and test db
 		if row['user_id'] in train_userids:
 			train_userinputs.append((train_userids_back[row['user_id']],productids[row['product_name']],row['user_input']))
 		elif row['user_id'] in test_userids:
@@ -109,19 +91,8 @@ def populate_trts(train_set_size):
 
 	# push the user inputs to train and test db
 	insert_many_to_db('train.db','INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', train_userinputs)
-	# db=sqlite3.connect('train.db')
-	# cursor=db.cursor()
-	# cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', train_userinputs)
-	# db.commit()
-	# db.close()
-	
 	insert_many_to_db('test.db','INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', test_userinputs)
-	# db=sqlite3.connect('test.db')
-	# cursor=db.cursor()
-	# cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', test_userinputs)
-	# db.commit()
-	# db.close()
-
+	
 def start(test_set_size=5):
 	create_db('train')
 	create_db('test')
