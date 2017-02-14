@@ -168,6 +168,24 @@ def get_user_id():
 		user_id=cursor.fetchone()[0]
 		logger.info('DB Query: Success , user id is %d',user_id)
 		db.commit()
+
+		''' WORKAROUND '''
+		
+		# populate currentl,d from test db
+		# tdb=sqlite3.connect('test.db')
+		# tcursor=tdb.cursor()
+		# tcursor.execute('''SELECT user_id FROM user_info_table WHERE email_id=? AND persona=?''',(user_email,user_persona))
+		# t_user_id=tcursor.fetchone()[0]
+		# tdb.commit()
+
+		# #like set
+		# tcursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(t_user_id,))
+		# current_set_l=set(random.sample([i[0] for i in tcursor.fetchall()],4))
+		# logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
+		# tdb.commit()
+		# tdb.close()
+
+		''' WORKAROUND '''
 		
 def update_current_product():
 		
@@ -186,7 +204,7 @@ def update_current_product():
 			return 0
 	else:
 		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 1:
+		if (len(current_set_d)+len(current_set_l)) > 2:
 			if model_value==1:
 				return model1()
 			elif model_value==2:
