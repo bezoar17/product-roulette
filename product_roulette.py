@@ -171,8 +171,7 @@ def get_user_id():
 def update_current_product():
 		
 	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
+	global current_product,n_users,current_set_l,current_set_d
 	global trending_set,fallback_set,model_value
 	
 	if len(n_users) <1 :
@@ -184,17 +183,6 @@ def update_current_product():
 		else :
 			logger.info('current product value is %d',current_product)
 			return 0
-		# logger.info('No previous dataset of users,show trending products')
-		# probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
-		# logger.info('Probable set is %s',repr(probable_set))
-		
-		# if len(probable_set) <1:
-			# # print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			# return 1
-		# else:
-			# current_product=random.sample(probable_set,1)[0]
-			# logger.info('current product value is %d',current_product)
-			# return 0
 	else:
 		#prev data is present, if user input is more than 2
 		if (len(current_set_d)+len(current_set_l)) > 2:
@@ -218,17 +206,6 @@ def update_current_product():
 			else:
 				logger.info('current_product is set to %d',current_product)
 				return 0
-				
-			# probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			# logger.info('Probable set for random product is %s',repr(probable_set))
-			# if len(probable_set) <1:
-				# print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				# logger.info('random probable set size was less than 1')
-				# return 1
-			# else:
-				# current_product=random.sample(probable_set,1)[0]
-				# logger.info('current_product is set to %d',current_product)
-				# return 0
 		
 def populate_previous_data():
 		""" 
@@ -360,14 +337,30 @@ def end():
 	logging.shutdown()
 
 ''' FUNCTION DEFINITIONS END'''
-
+# returns a random product from the set , else returns None
 def pick_product(set_name):
+	
+	global current_set_d,current_set_l,all_suggestions
+	
 	pset=set((set_name - (current_set_d | current_set_l | all_suggestions)))
 	if len(pset) <1:
 		return None
 	else:
 		return random.sample(pset,1)[0]
 
+def calc_user_similarity(user_elem):
+	
+	global n_users_lset,n_users_dset,current_set_l,current_set_d
+	
+	calc_val=0				
+	# jaccard index calculation
+	calc_val+= len(n_users_lset[user_elem] & current_set_l)
+	calc_val+= len(n_users_dset[user_elem] & current_set_d)
+	calc_val-= len(n_users_lset[user_elem] & current_set_d)
+	calc_val-= len(n_users_dset[user_elem] & current_set_l)
+	calc_val/= (len(current_set_d)+len(current_set_l))
+	
+	return calc_val
 
 # probability method
 def model1():
@@ -445,25 +438,19 @@ def model2():
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	logger.info('Fn: update_current_product() called')
-	
-	#the user has put in atleast 2 inputs till now
-	logger.info('user input is greater than 2. calculating similarity values')
+	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d,fallback_set
 	
 	# calculate similarity values with every user
 	for elem in n_users:
-		
-		calc_val=0				
+		n_users_jset[elem]=calc_user_similarity(elem)
+		# calc_val=0				
 		# jaccard index calculation
-		calc_val+= len(n_users_lset[elem] & current_set_l)
-		calc_val+= len(n_users_dset[elem] & current_set_d)
-		calc_val-= len(n_users_lset[elem] & current_set_d)
-		calc_val-= len(n_users_dset[elem] & current_set_l)
-		calc_val/= (len(current_set_d)+len(current_set_l))
-		n_users_jset[elem]=calc_val;
+		# calc_val+= len(n_users_lset[elem] & current_set_l)
+		# calc_val+= len(n_users_dset[elem] & current_set_d)
+		# calc_val-= len(n_users_lset[elem] & current_set_d)
+		# calc_val-= len(n_users_dset[elem] & current_set_l)
+		# calc_val/= (len(current_set_d)+len(current_set_l))
+		# n_users_jset[elem]=calc_val;
 	
 	# sort users in descending order of similarity index
 	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
@@ -473,12 +460,6 @@ def model2():
 		current_product=pick_product(n_users_lset[elem])
 		if current_product != None:
 			return 0
-		# probable_set=set((n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)))
-		# logger.info('Probable set with user %d is %s',elem,repr(probable_set))
-		# if len(probable_set)>0:
-			# current_product=random.sample(probable_set,1)[0] #choose any one from nearest user's like set
-			# logger.info('current_product is set to %d',current_product)
-			# return 0
 	
 	#if reached here, we could not find a product,show user more products from the fallback set 
 	current_product=pick_product(fallback_set)
@@ -488,15 +469,6 @@ def model2():
 	else:
 		logger.info('current_product is set to %d',current_product)
 		return 0
-	# logger.info('NOW showing fallback product, no user product matched')
-	# probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-	# if len(probable_set) <1:
-		# print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-		# return 1
-	# else:
-		# current_product=random.sample(probable_set,1)[0]
-		# logger.info('current_product is set to %d',current_product)
-		# return 0
 	
 #item-item similarity
 def model3():
