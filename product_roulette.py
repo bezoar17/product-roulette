@@ -229,7 +229,6 @@ def populate_previous_data():
 		trending_set=set()
 		fallback_set=set()
 		all_suggestions=set()
-		#true_sample_set=set()
 		
 		#get list of previous products,trending and random sets
 		cursor.execute('''SELECT product_id,trending FROM product_info_table WHERE persona=?''',(user_persona,))
@@ -335,19 +334,33 @@ def end():
 
 	logger.info('Exited application')
 	logging.shutdown()
-
 ''' FUNCTION DEFINITIONS END'''
-# returns a random product from the set , else returns None
-def pick_product(set_name):
+
+
+''' MODEL FUNCTIONS '''
+# returns a product from the set , else returns None (can set preference =1 for most liked product or = for random pick)
+def pick_product(set_name,preferred=0):
 	
-	global current_set_d,current_set_l,all_suggestions
+	global current_set_d,current_set_l,all_suggestions,n_pr_lset
 	
 	pset=set((set_name - (current_set_d | current_set_l | all_suggestions)))
-	if len(pset) <1:
-		return None
-	else:
-		return random.sample(pset,1)[0]
-
+	
+	if preferred == 0:						# pick random, no preference
+		if len(pset) <1:
+			return None
+		else:
+			return random.sample(pset,1)[0]
+	elif preferred == 1:					# pick product with most likes
+		if len(pset) <1:
+			return None
+		else:
+			#templist=sorted(pset,key=lambda x: len(n_pr_lset[x]),reverse=True)
+			templist=list()		
+			templist=[(elem,len(n_pr_lset[elem])) for elem in list(pset)]
+			templist.sort(key=lambda tup: tup[1],reverse=True)
+			return templist[0][0]			# return product id with most likes
+			
+# calculates the user similarity of user_elem with the current user 
 def calc_user_similarity(user_elem):
 	
 	global n_users_lset,n_users_dset,current_set_l,current_set_d
@@ -362,74 +375,59 @@ def calc_user_similarity(user_elem):
 	
 	return calc_val
 
-# probability method
+# calculates the pval for product product_elem
+def calc_pval(product_elem):
+	
+	global n_pr_lset,n_pr_dset,n_users_jset
+	
+	calc_val=0
+	for val in n_pr_lset[product_elem]:
+		calc_val+= n_users_jset[val]
+	for val in n_pr_dset[product_elem]:
+		calc_val-= n_users_jset[val]
+
+	if (len(n_pr_lset[product_elem]) + len(n_pr_dset[product_elem])) <1:
+		calc_val=-100
+	else:
+		calc_val/= (len(n_pr_lset[product_elem]) + len(n_pr_dset[product_elem]))
+	
+	return calc_val
+
+# calc similarity with users, calc pval for all products , bick product with best pval
 def model1():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	logger.info('Fn: update_current_product() called')
-
+	global current_product,n_users,n_users_jset,current_set_l,current_set_d
+	global n_products,n_pr_pval,fallback_set
+	
 	#the user has put in atleast 2 inputs till now
-	logger.info('user input is greater than 2. calculating similarity values')
 	for elem in n_users:
-		calc_val=0					
-		# jaccard index calculation
-		calc_val+= len(n_users_lset[elem] & current_set_l)
-		calc_val+= len(n_users_dset[elem] & current_set_d)
-		logger.info('The agreement total for user %d is %d',elem,calc_val)
-		
-		calc_val-= len(n_users_lset[elem] & current_set_d)
-		calc_val-= len(n_users_dset[elem] & current_set_l)
-		logger.info('The numerator value for user %d is %d',elem,calc_val)
-		
-		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-		calc_val/= (len(current_set_d)+len(current_set_l))
-		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-		n_users_jset[elem]=calc_val;
+		n_users_jset[elem]=calc_user_similarity(elem)
 	
-	# take only those that user has not seen for calc probabilities.
-	concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
+	# take only those products that user has not seen for calculating pval.
+	concerned_list = list(set((n_products - (current_set_d | current_set_l | all_suggestions))))
 	
-	''' original '''
-	# for elem in concerned_list:
-	# 	calc_val=0
-	# 	for val in n_pr_lset[elem]:
-	# 		calc_val+= n_users_jset[val]
-	# 	for val in n_pr_dset[elem]:
-	# 		calc_val-= n_users_jset[val]
-
-	# 	if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-	# 		n_pr_pval[elem]=-1000000
-	# 	else:
-	# 		calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-	# 		n_pr_pval[elem]=calc_val
-	''' original '''
-
+	#calculate pval for each product
 	for elem in concerned_list:
-		calc_val=0
-		for val in n_pr_lset[elem]:
-			calc_val+= n_users_jset[val]
-		if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-			n_pr_pval[elem]=-10
-		else:
-			# calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-			n_pr_pval[elem]=calc_val
-	# for elem in concerned_list:
-	# 	calc_val=0
-	# 	calc_val+=len(n_pr_lset[elem])
-	# 	n_pr_pval[elem]=calc_val
-			
+		n_pr_pval[elem]=calc_pval(elem)
+		
+	# sort products according to pval and pick product with best pval
 	concerned_list.sort(key=n_pr_pval.get,reverse=True)
 	logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
-	# we now have the sorted list of products based on their probabilities  not in all_suggestions
 	if len(concerned_list) > 0: 
 		current_product=concerned_list[0]
 		return 0
-	return 1
+	
+	#if reached here, we could not find a product,show user more products from the fallback set 
+	current_product=pick_product(fallback_set)
+	if current_product == None:
+		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+		return 1
+	else:
+		logger.info('current_product is set to %d',current_product)
+		return 0
 	
 # calc similarity with users, sort acc to similarity , pick random like from nearest user
 def model2():
@@ -461,61 +459,8 @@ def model2():
 		logger.info('current_product is set to %d',current_product)
 		return 0
 	
-#item-item similarity
-def model3():
-	"""
-	Returns 0 for a successful attempt, else returns 1 and prints the error message
-	"""
-	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	logger.info('Fn: update_current_product() called')
-		
-	#the user has put in atleast 2 inputs till now
-	logger.info('user input is greater than 2. calculating similarity values')
-	for elem in n_users:
-		calc_val=0					
-		# jaccard index calculation
-		calc_val+= len(n_users_lset[elem] & current_set_l)
-		calc_val+= len(n_users_dset[elem] & current_set_d)
-		logger.info('The agreement total for user %d is %d',elem,calc_val)
-		
-		calc_val-= len(n_users_lset[elem] & current_set_d)
-		calc_val-= len(n_users_dset[elem] & current_set_l)
-		logger.info('The numerator value for user %d is %d',elem,calc_val)
-		
-		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-		calc_val/= (len(current_set_d)+len(current_set_l))
-		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-		n_users_jset[elem]=calc_val;
-	
-	# take only those that user has not seen for calc probabilities.
-	concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
-
-	for elem in concerned_list:
-		calc_val=0
-		for val in n_pr_lset[elem]:
-			calc_val+= n_users_jset[val]
-		for val in n_pr_dset[elem]:
-			calc_val-= n_users_jset[val]
-
-		if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-			n_pr_pval[elem]=-1000000
-		else:
-			calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-			n_pr_pval[elem]=calc_val
-			
-	concerned_list.sort(key=n_pr_pval.get,reverse=True)
-	logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
-	# we now have the sorted list of products based on their probabilities  not in all_suggestions
-	if len(concerned_list) > 0: 
-		current_product=concerned_list[0]
-		return 0
-	return 1
-				
 # calc similarity with users, sort acc to similarity , pick most popular product in 5 nearest users
-def model4():
+def model3():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
@@ -552,7 +497,22 @@ def model4():
 	else:
 		logger.info('current_product is set to %d',current_product)
 		return 0		
+
+#item-item similarity
+def model4():
+	"""
+	Returns 0 for a successful attempt, else returns 1 and prints the error message
+	"""
+	global logger
+	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
+	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
+	global trending_set,fallback_set
+	pass
+		
 	
+				
+''' MODEL FUNCTIONS '''
+
 #  START of APPLICATION
 '''
 logger.info('Application Started')
@@ -620,5 +580,4 @@ logging.shutdown()
 
 #  END of APPLICATION
 '''
-
 # if __name__ == '__main__':
