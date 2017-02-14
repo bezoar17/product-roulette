@@ -437,20 +437,11 @@ def model2():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
-	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d,fallback_set
+	global logger,current_product,n_users,n_users_jset,n_users_lset,fallback_set
 	
 	# calculate similarity values with every user
 	for elem in n_users:
 		n_users_jset[elem]=calc_user_similarity(elem)
-		# calc_val=0				
-		# jaccard index calculation
-		# calc_val+= len(n_users_lset[elem] & current_set_l)
-		# calc_val+= len(n_users_dset[elem] & current_set_d)
-		# calc_val-= len(n_users_lset[elem] & current_set_d)
-		# calc_val-= len(n_users_dset[elem] & current_set_l)
-		# calc_val/= (len(current_set_d)+len(current_set_l))
-		# n_users_jset[elem]=calc_val;
 	
 	# sort users in descending order of similarity index
 	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
@@ -523,69 +514,45 @@ def model3():
 		return 0
 	return 1
 				
-# calc aggregate product based on nearest users 
+# calc similarity with users, sort acc to similarity , pick most popular product in 5 nearest users
 def model4():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
-	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	logger.info('Fn: model4() called')
+	global logger,current_product,n_users,n_users_jset,current_set_l,current_set_d,fallback_set
 	
-	#the user has put in atleast 2 inputs till now
-	logger.info('user input is greater than 2. calculating similarity values')
+	# calculate similarity values with every user
 	for elem in n_users:
-		calc_val=0					
-		# jaccard index calculation
-		calc_val+= len(n_users_lset[elem] & current_set_l)
-		calc_val+= len(n_users_dset[elem] & current_set_d)
-		logger.info('The agreement total for user %d is %d',elem,calc_val)
-		
-		calc_val-= len(n_users_lset[elem] & current_set_d)
-		calc_val-= len(n_users_dset[elem] & current_set_l)
-		logger.info('The numerator value for user %d is %d',elem,calc_val)
-		
-		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-		calc_val/= (len(current_set_d)+len(current_set_l))
-		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-		n_users_jset[elem]=calc_val;
+		n_users_jset[elem]=calc_user_similarity(elem)
 	
-	# for all nearest neighbours in descending order of similarity index
+	# sort users in descending order of similarity index
 	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
 	logger.info('Nearest users order is %s',repr(nearest_order))
-	probable_dict=dict()
-	# take the product with most frequency in nearest 5 users
+		
+	# calculate frequency of products in 5 nearest users
+	product_freq=dict()
 	for elem in nearest_order[0:5]:
 		for each in (n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)):
-			probable_dict[each]=probable_dict.get(each,0)+1
-	logger.info('pdd dict is %s',repr(probable_dict))
-	pdd=sorted(probable_dict, key=probable_dict.get,reverse=True)
-	logger.info('pdd is %s',repr(pdd))
+			product_freq[each]=product_freq.get(each,0)+1
+	logger.info('product frequency dict is %s',repr(product_freq))
+	
+	#sort products based on frequency and pick most popular
+	pdd=sorted(product_freq, key=product_freq.get,reverse=True)
+	logger.info('sorted products on frequency is %s',repr(pdd))
 	if len(pdd)>0:
-		current_product=pdd[0] #choose any one from nearest user's like set
+		current_product=pdd[0] #choose most popular
 		logger.info('current_product is set to %d',current_product)
-		logger.info('Fn: update_current_product() exited with return value 0')
 		return 0
 	
-	#if reached here. product not found
-	# show a random product to build better user profile
-	logger.info('NOW showing random product, no user product matched')
-	probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-	logger.info('Probable set for random product is %s',repr(probable_set))
-	if len(probable_set) <1:
+	#if reached here, we could not find a product,show user more products from the fallback set 
+	current_product=pick_product(fallback_set)
+	if current_product == None:
 		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-		logger.info('random probable set size was less than 1')
-		logger.info('Fn: update_current_product() exited with return value 1')
 		return 1
 	else:
-		current_product=random.sample(probable_set,1)[0]
 		logger.info('current_product is set to %d',current_product)
-		logger.info('Fn: update_current_product() exited with return value 0')
-		return 0
-		
-
+		return 0		
+	
 #  START of APPLICATION
 '''
 logger.info('Application Started')
