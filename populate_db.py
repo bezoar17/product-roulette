@@ -1,6 +1,5 @@
 import sqlite3
 import random
-import logging
 import csv
 
 productids=dict()
@@ -32,18 +31,19 @@ def populate_products():
 	product_values=list()
 	for row in reader:
 		product_values.append((row['product_name'],row['persona'],row['trending']))
-
-	db=sqlite3.connect('train.db')
-	cursor=db.cursor()
-	cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values)
-	db.commit()
-	db.close()
+	
+	insert_many_to_db('train.db','INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values)
+	# db=sqlite3.connect('train.db')
+	# cursor=db.cursor()
+	# cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values) # add products to train db
+	# db.commit()
+	# db.close()
 
 	db=sqlite3.connect('test.db')
 	cursor=db.cursor()
-	cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values)
+	cursor.executemany('INSERT INTO product_info_table(product_name,persona,trending) VALUES (?,?,?)', product_values) # add products to test db
 	db.commit()
-	cursor.execute('SELECT product_id,product_name FROM product_info_table')
+	cursor.execute('SELECT product_id,product_name FROM product_info_table')			# build the product's name -> id dictionary
 	for i in cursor.fetchall():
 		productids[i[1]]=i[0]
 	db.commit()
@@ -60,22 +60,24 @@ def populate_trts(train_set_size):
 	for row in reader:
 		all_users.append((row['user_id'],row['user_email'],row['persona']))
 		useremailtoid[row['user_email']]=row['user_id']
-	# all_users_safe=all_users
+	
 	random.shuffle(all_users) # comment this line for a fixed simulation of first 15 in training and last 5 in test set.
 	train_userids=[i[0] for i in all_users[0:train_set_size]]
 	test_userids=[i[0] for i in all_users[train_set_size:]]
 
-	db=sqlite3.connect('train.db')
-	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
-	db.commit()
-	db.close()
-
-	db=sqlite3.connect('test.db')
-	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
-	db.commit()
-	db.close()
+	insert_many_to_db('train.db','INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
+	#db=sqlite3.connect('train.db')
+	#cursor=db.cursor()
+	#cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
+	#db.commit()
+	#db.close()
+	
+	insert_many_to_db('test.db','INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
+	# db=sqlite3.connect('test.db')
+	# cursor=db.cursor()
+	# cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
+	# db.commit()
+	# db.close()
 
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
@@ -105,19 +107,20 @@ def populate_trts(train_set_size):
 		elif row['user_id'] in test_userids:
 			test_userinputs.append((test_userids_back[row['user_id']],productids[row['product_name']],row['user_input']))
 
-	# push the datasets
+	# push the user inputs to train and test db
+	insert_many_to_db('train.db','INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', train_userinputs)
+	# db=sqlite3.connect('train.db')
+	# cursor=db.cursor()
+	# cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', train_userinputs)
+	# db.commit()
+	# db.close()
 	
-	db=sqlite3.connect('train.db')
-	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', train_userinputs)
-	db.commit()
-	db.close()
-
-	db=sqlite3.connect('test.db')
-	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', test_userinputs)
-	db.commit()
-	db.close()
+	insert_many_to_db('test.db','INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', test_userinputs)
+	# db=sqlite3.connect('test.db')
+	# cursor=db.cursor()
+	# cursor.executemany('INSERT INTO user_inputs_table(user_id,product_id,input_val) VALUES (?,?,?)', test_userinputs)
+	# db.commit()
+	# db.close()
 
 def start(test_set_size=5):
 	create_db('train')
@@ -125,6 +128,13 @@ def start(test_set_size=5):
 	populate_products()
 	populate_trts(20-test_set_size)
 
+def insert_many_to_db(db_name,sql_query,list_val):
+	
+	db=sqlite3.connect(db_name)
+	cursor=db.cursor()
+	cursor.executemany(sql_query,list_val)
+	db.commit()
+	db.close()
+	
 if __name__ == '__main__':
 	start()
-
