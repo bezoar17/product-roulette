@@ -47,7 +47,7 @@ def populate_user_details():
 # testing parameters
 model_nos=[1,2,3]
 iterations=10
-nsuggestions_peruser=20
+nsuggestions_peruser=25
 test_set_size=5
 
 # results 
@@ -59,9 +59,6 @@ model_results=dict()
 for model_no in model_nos:
 	
 	#result calculation variables
-	total_hits=0
-	total_suggestions=0
-	previous_avg=0
 	avg_hit_per_suggestion=0
 	avg_hit_per_like=0
 	should_exit=0
@@ -70,6 +67,8 @@ for model_no in model_nos:
 	
 	for iterval in range(iterations):
 		
+		print('Iteration No.',iterval)
+
 		if should_exit == 1:
 			break
 			
@@ -85,12 +84,14 @@ for model_no in model_nos:
 			
 			hits_peruser=0				 # initialize the hit and oop count for user
 			oops_peruser=0
+			none_count=0
 			
 			for i in range(nsuggestions_peruser):
 				suggestion=pr.getProduct() 			# get the suggestion(product id) for the user
-				print(suggestion,'suggested to',elem[1])
+				# print(suggestion,'suggested to',elem[1])
 				if suggestion == None:
 					# print('None suggested')
+					none_count+=1
 					pass
 					# continue
 					# pr.set_user_input(0)
@@ -99,13 +100,12 @@ for model_no in model_nos:
 					pr.set_user_input(1)
 					# print("!!! HIT !!!")
 					hits_peruser+=1
-				
 				elif suggestion in n_users_dset_test[elem[0]]:		# OOPs
 					pr.set_user_input(-1)
 					# print("!!! OOPS !!!")
 					oops_peruser+=1
-				n_users_sgset_test[elem[0]].add(suggestion)			# add suggestion to users set
 			
+			n_users_sgset_test[elem[0]]=set(pr.all_suggestions)
 			# end the roulette
 			pr.set_user_input(0)
 			pr.end()				
@@ -114,20 +114,16 @@ for model_no in model_nos:
 			n_users_rset_test[elem[0]]=(hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]))
 			csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser])
 
-			#total hits and suggestions calc
-			total_hits+=hits_peruser
-			total_suggestions+=len(n_users_sgset_test[elem[0]])
-
 			#recall calculation
-			avg_hit_per_like+=hits_peruser/len(n_users_lset_test[elem[0]])
+			avg_hit_per_like+=(hits_peruser/len(n_users_lset_test[elem[0]]))
 			
-		previous_avg=avg_hit_per_suggestion
-		avg_hit_per_suggestion=total_hits/total_suggestions
+			#precision calculation
+			avg_hit_per_suggestion+=(hits_peruser/len(n_users_sgset_test[elem[0]]))
 
-		#print('Iteration',iterval,'>> diff:',abs(avg_hit_per_suggestion-previous_avg))
-		print('Iteration',iterval,'>> precision:',avg_hit_per_suggestion)
-	model_results[model_no]={'precision':avg_hit_per_suggestion*10,'recall':(avg_hit_per_like*10)/(iterations*test_set_size)}
-	
+			print('Fallback count:',pr.fall_back_count,'None count:',none_count,'Hit count:',hits_peruser,'Oops count:',oops_peruser)
+
+	model_results[model_no]={'precision':(avg_hit_per_suggestion*10)/(iterations*test_set_size),'recall':(avg_hit_per_like*10)/(iterations*test_set_size)}
+
 #write results to csv
 with open('results.csv', 'w', newline='') as f:
     writer = csv.writer(f)

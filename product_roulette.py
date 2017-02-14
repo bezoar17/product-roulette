@@ -47,6 +47,7 @@ db=None
 cursor=None
 all_suggestions=None
 model_value=None
+fall_back_count=None
 ''' GLOBALS FOR MODULE '''
 
 ''' FUNCTION DEFINITIONS START'''
@@ -172,7 +173,7 @@ def update_current_product():
 		
 	global logger
 	global current_product,n_users,current_set_l,current_set_d
-	global trending_set,fallback_set,model_value
+	global trending_set,fallback_set,model_value,fall_back_count
 	
 	if len(n_users) <1 :
 		#show trending products
@@ -185,7 +186,7 @@ def update_current_product():
 			return 0
 	else:
 		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
+		if (len(current_set_d)+len(current_set_l)) > 1:
 			if model_value==1:
 				return model1()
 			elif model_value==2:
@@ -205,6 +206,7 @@ def update_current_product():
 				return 1
 			else:
 				logger.info('current_product is set to %d',current_product)
+				fall_back_count+=1
 				return 0
 		
 def populate_previous_data():
@@ -318,12 +320,13 @@ def getProduct():
 	return current_product
 
 def start(model_no=4):
-	global db,cursor,logger,handler,model_value
+	global db,cursor,logger,handler,model_value,fall_back_count
 	#connect to db
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
 	logger.info('Connected to db')
 	model_value=model_no
+	fall_back_count=0
 
 def end():
 	global db,cursor
@@ -393,14 +396,14 @@ def calc_pval(product_elem):
 	
 	return calc_val
 
-# calc similarity with users, calc pval for all products , bick product with best pval
+# calc similarity with users, calc pval for all products , pick product with best pval
 def model1():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger
 	global current_product,n_users,n_users_jset,current_set_l,current_set_d
-	global n_products,n_pr_pval,fallback_set
+	global n_products,n_pr_pval,fallback_set,fall_back_count
 	
 	#the user has put in atleast 2 inputs till now
 	for elem in n_users:
@@ -427,6 +430,7 @@ def model1():
 		return 1
 	else:
 		logger.info('current_product is set to %d',current_product)
+		fall_back_count+=1
 		return 0
 	
 # calc similarity with users, sort acc to similarity , pick random like from nearest user
@@ -435,7 +439,7 @@ def model2():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
-	global logger,current_product,n_users,n_users_jset,n_users_lset,fallback_set
+	global logger,current_product,n_users,n_users_jset,n_users_lset,fallback_set,fall_back_count
 	
 	# calculate similarity values with every user
 	for elem in n_users:
@@ -457,6 +461,7 @@ def model2():
 		return 1
 	else:
 		logger.info('current_product is set to %d',current_product)
+		fall_back_count+=1
 		return 0
 	
 # calc similarity with users, sort acc to similarity , pick most popular product in 5 nearest users
@@ -464,7 +469,7 @@ def model3():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
-	global logger,current_product,n_users,n_users_jset,current_set_l,current_set_d,fallback_set
+	global logger,current_product,n_users,n_users_jset,current_set_l,current_set_d,fallback_set,fall_back_count
 	
 	# calculate similarity values with every user
 	for elem in n_users:
@@ -496,6 +501,7 @@ def model3():
 		return 1
 	else:
 		logger.info('current_product is set to %d',current_product)
+		fall_back_count+=1
 		return 0		
 
 #item-item similarity
@@ -512,72 +518,3 @@ def model4():
 	
 				
 ''' MODEL FUNCTIONS '''
-
-#  START of APPLICATION
-'''
-logger.info('Application Started')
-print("Welcome to Product Roulette")
-
-#connect to db
-logger.info('Connecting to train.db')
-db=sqlite3.connect('train.db')
-cursor=db.cursor()
-logger.info('Connected to db')
-
-logger.info('Taking user input')
-user_email=input('Enter your email-id : ')
-user_persona=None
-get_user_id()
-if user_id==None:
-	#  ask for persona and add to db 
-	print('Looks like you are here for the first time.')
-	user_persona=input('Enter your persona (for suggestions press \'x\'):')
-	if user_persona=='x':
-		print_personas()
-		user_persona=input('Enter your persona :')
-	get_user_id()
-	print('Registered you ! Getting products for your persona')
-else:
-	print('Found you ! Getting products for your persona:',user_persona)
-
-# all previous user input data 
-populate_previous_data()
-
-# variable to check if user input is valid
-valid_choice=1
-while(1):
-	showProduct(valid_choice)
-	#if error happened in showProduct,current_product is set to None
-	if current_product == None:
-		logger.info('current_product was set to None')
-		push_user_data_to_db() #before exit , users input are pushed to Db
-		break
-	logger.info('Product shown is :%d',current_product)
-	menu_val=input('Press \'y\' if you like product, \'n\' if you don;t like the product , \'p\' to pass and \'e\' to exit application : ')
-	if(menu_val =='e'):
-		logger.info('User entered valid choice:exit command')
-		valid_choice=1
-		push_user_data_to_db() #before exit , users input are pushed to Db
-		break
-	elif(menu_val =='y' or menu_val =='n' or menu_val=='p'):
-		logger.info('User entered valid choice')
-		valid_choice=1
-		update_new_input() # user input added to newset(user's inputs in this session) and user's overall like/dislike set if input is y or n
-	else:
-		logger.info('User entered invalid choice')
-		valid_choice=0
-		print('Please enter a valid choice')
-
-logger.info('Exiting application')
-print('See you later! Alligator!')
-
-db.commit() #make sure any pending transactions are comitted
-db.close() #close db
-logger.info('DB committed and closed')
-
-logger.info('Exited application')
-logging.shutdown()
-
-#  END of APPLICATION
-'''
-# if __name__ == '__main__':
