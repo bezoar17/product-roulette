@@ -49,76 +49,88 @@ csvresults=list()
 csvresults.append(['model_no','iteration','user_email','likes','dislikes','hits','oops','suggestions_given','suggestions_value'])
 
 # testing parameters
-model_no=1
-iterations=25
-nsuggestions_peruser=30
+model_nos=[1]
+iterations=3
+nsuggestions_peruser=20
+test_set_size=5
 
-total_hits=0
-total_suggestions=0
-previous_avg=0
-avg_hit_per_suggestion=0
-should_exit=0
+model_results=dict()
 
-for iterval in range(iterations):
+for model_no in model_nos:
 	
-	if should_exit == 1:
-		break;
-	popdb.start()
-
-	# use the test db and iterate over each user
-	db=sqlite3.connect('test.db')
-	cursor=db.cursor()
-	populate_user_details()
-
-
-	for elem in n_users_test:
-		pr.start(model_no)
-		pr.set_user(elem[1],elem[2]) # will set the internal variable for user id also 
-		pr.populate_previous_data()
-		pr.valid_choice=1
+	#result calculations
+	total_hits=0
+	total_suggestions=0
+	previous_avg=0
+	avg_hit_per_suggestion=0
+	avg_hit_per_like=0
+	should_exit=0
+	
+	for iterval in range(iterations):
 		
-		hits_peruser=0
-		oops_peruser=0
-		
-		# each user gives 10 inputs
-		for i in range(nsuggestions_peruser):
-			suggestion=pr.getProduct() # basically calls showproduct and returns current_product id
-			if suggestion == None:
-				# print('None suggested')
-				pass
-				# continue
-				# pr.set_user_input(0)
-				# break
-			# send input to pr
-			if suggestion in n_users_lset_test[elem[0]]:
-				pr.set_user_input(1)
-				# print("!!! HIT !!!")
-				hits_peruser+=1
-			elif suggestion in n_users_dset_test[elem[0]]:
-				pr.set_user_input(-1)
-				# print("!!! OOPS !!!")
-				oops_peruser+=1
-			n_users_sgset_test[elem[0]].add(suggestion)
-		pr.set_user_input(0) # this will end the pr and call push data to db 
-		# we can push the complete data for this user from test to train also
-		pr.end()
+		if should_exit == 1:
+			break;
+		popdb.start(test_set_size)
 
-		#calculate result for user
-		n_users_rset_test[elem[0]]=(hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]))
-		# print('result for:',elem[0],':',n_users_rset_test[elem[0]])
-		csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser])
+		# use the test db and iterate over each user
+		db=sqlite3.connect('test.db')
+		cursor=db.cursor()
+		populate_user_details()
 
-		#total calc
-		total_hits+=hits_peruser
-		total_suggestions+=len(n_users_sgset_test[elem[0]])
-		
-	previous_avg=avg_hit_per_suggestion
-	avg_hit_per_suggestion=total_hits/total_suggestions
 
-	print('Iter',iterval,'>> diff:',abs(avg_hit_per_suggestion-previous_avg))
+		for elem in n_users_test:
+			pr.start(model_no)
+			pr.set_user(elem[1],elem[2]) # will set the internal variable for user id also 
+			pr.populate_previous_data()
+			pr.valid_choice=1
+			
+			hits_peruser=0
+			oops_peruser=0
+			
+			# each user gives 10 inputs
+			for i in range(nsuggestions_peruser):
+				suggestion=pr.getProduct() # basically calls showproduct and returns current_product id
+				if suggestion == None:
+					# print('None suggested')
+					pass
+					# continue
+					# pr.set_user_input(0)
+					# break
+				# send input to pr
+				if suggestion in n_users_lset_test[elem[0]]:
+					pr.set_user_input(1)
+					# print("!!! HIT !!!")
+					hits_peruser+=1
+				elif suggestion in n_users_dset_test[elem[0]]:
+					pr.set_user_input(-1)
+					# print("!!! OOPS !!!")
+					oops_peruser+=1
+				n_users_sgset_test[elem[0]].add(suggestion)
+			pr.set_user_input(0) # this will end the pr and call push data to db 
+			# we can push the complete data for this user from test to train also
+			pr.end()
+
+			#calculate result for user
+			n_users_rset_test[elem[0]]=(hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]))
+			# print('result for:',elem[0],':',n_users_rset_test[elem[0]])
+			csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser])
+
+			#total calc
+			total_hits+=hits_peruser
+			total_suggestions+=len(n_users_sgset_test[elem[0]])
+
+			#recall calc
+			avg_hit_per_like+=hits_peruser/len(n_users_lset_test[elem[0]])
+			
+		previous_avg=avg_hit_per_suggestion
+		avg_hit_per_suggestion=total_hits/total_suggestions
+
+		print('Iter',iterval,'>> diff:',abs(avg_hit_per_suggestion-previous_avg))
+
+	model_results[model_no]={'precision':avg_hit_per_suggestion*10,'recall':(avg_hit_per_like*10)/(iterations*test_set_size)}
 
 with open('results.csv', 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerows(csvresults)
 print('Completed>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-print('AVG:',avg_hit_per_suggestion)
+print('Model results:',repr(model_results))

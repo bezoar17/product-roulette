@@ -49,7 +49,7 @@ def populate_products():
 	db.commit()
 	db.close()
 
-def populate_trts():
+def populate_trts(train_set_size):
 
 	# populate the train and test db ,the user info and their likes go in 80:20 fashion
 	global productids,useremailtoid,train_userids_back,test_userids_back
@@ -62,18 +62,18 @@ def populate_trts():
 		useremailtoid[row['user_email']]=row['user_id']
 	# all_users_safe=all_users
 	random.shuffle(all_users) # comment this line for a fixed simulation of first 15 in training and last 5 in test set.
-	train_userids=[i[0] for i in all_users[0:15]]
-	test_userids=[i[0] for i in all_users[15:]]
+	train_userids=[i[0] for i in all_users[0:train_set_size]]
+	test_userids=[i[0] for i in all_users[train_set_size:]]
 
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:15]])
+	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)',[i[1:] for i in all_users[0:train_set_size]])
 	db.commit()
 	db.close()
 
 	db=sqlite3.connect('test.db')
 	cursor=db.cursor()
-	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[15:]])
+	cursor.executemany('INSERT INTO user_info_table(email_id,persona) VALUES (?,?)', [i[1:] for i in all_users[train_set_size:]])
 	db.commit()
 	db.close()
 
@@ -119,11 +119,11 @@ def populate_trts():
 	db.commit()
 	db.close()
 
-def start():
+def start(test_set_size=5):
 	create_db('train')
 	create_db('test')
 	populate_products()
-	populate_trts()
+	populate_trts(20-test_set_size)
 
 if __name__ == '__main__':
 	start()
