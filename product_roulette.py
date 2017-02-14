@@ -407,7 +407,7 @@ def model1():
 		n_users_jset[elem]=calc_user_similarity(elem)
 	
 	# take only those products that user has not seen for calculating pval.
-	concerned_list = list(set((n_products - (current_set_d | current_set_l | all_suggestions))))
+	concerned_list = list(set((set(n_products) - (current_set_d | current_set_l | all_suggestions))))
 	
 	#calculate pval for each product
 	for elem in concerned_list:
