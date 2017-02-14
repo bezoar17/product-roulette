@@ -208,17 +208,59 @@ def get_user_id():
 	logger.info('Fn: get_user_id() exited')
 
 def update_current_product():
-		if model_value==1:
-			return trial1()
-		elif model_value==2:
-			return trial2()
-		elif model_value==3:
-			return trial3()
-		elif model_value==4:
-			return trial4()
+		
+	global logger
+	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
+	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
+	global trending_set,fallback_set
+	logger.info('Fn: update_current_product() called')
+	
+	if len(n_users) <1 :
+		#show trending products
+		logger.info('No previous dataset of users,show trending products')
+		probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
+		logger.info('Probable set is %s',repr(probable_set))
+		
+		if len(probable_set) <1:
+			# print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+			logger.info('Fn: update_current_product() exited with return value 1')
+			return 1
 		else:
-			return trial4()
-
+			current_product=random.sample(probable_set,1)[0]
+			logger.info('current product value is %d',current_product)
+			logger.info('Fn: update_current_product() exited with return value 0')
+			return 0
+	else:
+		#prev data is present, if user input is more than 2
+		if (len(current_set_d)+len(current_set_l)) > 2:
+			if model_value==1:
+				return model1()
+			elif model_value==2:
+				return model2()
+			elif model_value==3:
+				return model3()
+			elif model_value==4:
+				return model4()
+			else:
+				return model4()
+		else:
+			# show a random product to build user profile
+			# or show a product from the top/least number of inputs				
+			logger.info('NOW showing random product as user inputs were not enough')
+			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
+			logger.info('Probable set for random product is %s',repr(probable_set))
+			if len(probable_set) <1:
+				print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+				logger.info('random probable set size was less than 1')
+				logger.info('Fn: update_current_product() exited with return value 1')
+				return 1
+			else:
+				current_product=random.sample(probable_set,1)[0]
+				logger.info('current_product is set to %d',current_product)
+				logger.info('Fn: update_current_product() exited with return value 0')
+				return 0
+	logger.info('Fn: update_current_product() exited with return value None')
+		
 def populate_previous_data():
 		""" 
 		Get the list of previous users, their like/dislike set and populate trending and random sets
@@ -381,7 +423,7 @@ def end():
 ''' FUNCTION DEFINITIONS END'''
 
 # probability method
-def trial1():
+def model1():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
@@ -390,102 +432,67 @@ def trial1():
 	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
 	global trending_set,fallback_set
 	logger.info('Fn: update_current_product() called')
-	
-	if len(n_users) <1 :
-		#show trending products
-		logger.info('No previous dataset of users,show trending products')
-		probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
-		logger.info('Probable set is %s',repr(probable_set))
+
+	#the user has put in atleast 2 inputs till now
+	logger.info('user input is greater than 2. calculating similarity values')
+	for elem in n_users:
+		calc_val=0					
+		# jaccard index calculation
+		calc_val+= len(n_users_lset[elem] & current_set_l)
+		calc_val+= len(n_users_dset[elem] & current_set_d)
+		logger.info('The agreement total for user %d is %d',elem,calc_val)
 		
-		if len(probable_set) <1:
-			# print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			logger.info('Fn: update_current_product() exited with return value 1')
-			return 1
+		calc_val-= len(n_users_lset[elem] & current_set_d)
+		calc_val-= len(n_users_dset[elem] & current_set_l)
+		logger.info('The numerator value for user %d is %d',elem,calc_val)
+		
+		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
+		calc_val/= (len(current_set_d)+len(current_set_l))
+		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
+		n_users_jset[elem]=calc_val;
+	
+	# take only those that user has not seen for calc probabilities.
+	concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
+	
+	''' original '''
+	# for elem in concerned_list:
+	# 	calc_val=0
+	# 	for val in n_pr_lset[elem]:
+	# 		calc_val+= n_users_jset[val]
+	# 	for val in n_pr_dset[elem]:
+	# 		calc_val-= n_users_jset[val]
+
+	# 	if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
+	# 		n_pr_pval[elem]=-1000000
+	# 	else:
+	# 		calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
+	# 		n_pr_pval[elem]=calc_val
+	''' original '''
+
+	for elem in concerned_list:
+		calc_val=0
+		for val in n_pr_lset[elem]:
+			calc_val+= n_users_jset[val]
+		if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
+			n_pr_pval[elem]=-10
 		else:
-			current_product=random.sample(probable_set,1)[0]
-			logger.info('current product value is %d',current_product)
-			logger.info('Fn: update_current_product() exited with return value 0')
-			return 0
-	else:
-		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
-			#the user has put in atleast 2 inputs till now
-			logger.info('user input is greater than 2. calculating similarity values')
-			for elem in n_users:
-				calc_val=0					
-				# jaccard index calculation
-				calc_val+= len(n_users_lset[elem] & current_set_l)
-				calc_val+= len(n_users_dset[elem] & current_set_d)
-				logger.info('The agreement total for user %d is %d',elem,calc_val)
-				
-				calc_val-= len(n_users_lset[elem] & current_set_d)
-				calc_val-= len(n_users_dset[elem] & current_set_l)
-				logger.info('The numerator value for user %d is %d',elem,calc_val)
-				
-				logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-				calc_val/= (len(current_set_d)+len(current_set_l))
-				logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-				n_users_jset[elem]=calc_val;
+			# calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
+			n_pr_pval[elem]=calc_val
+	# for elem in concerned_list:
+	# 	calc_val=0
+	# 	calc_val+=len(n_pr_lset[elem])
+	# 	n_pr_pval[elem]=calc_val
 			
-			# take only those that user has not seen for calc probabilities.
-			concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
-			
-			''' original '''
-			# for elem in concerned_list:
-			# 	calc_val=0
-			# 	for val in n_pr_lset[elem]:
-			# 		calc_val+= n_users_jset[val]
-			# 	for val in n_pr_dset[elem]:
-			# 		calc_val-= n_users_jset[val]
-
-			# 	if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-			# 		n_pr_pval[elem]=-1000000
-			# 	else:
-			# 		calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-			# 		n_pr_pval[elem]=calc_val
-			''' original '''
-
-			for elem in concerned_list:
-				calc_val=0
-				for val in n_pr_lset[elem]:
-					calc_val+= n_users_jset[val]
-				if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-					n_pr_pval[elem]=-10
-				else:
-					# calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-					n_pr_pval[elem]=calc_val
-			# for elem in concerned_list:
-			# 	calc_val=0
-			# 	calc_val+=len(n_pr_lset[elem])
-			# 	n_pr_pval[elem]=calc_val
-					
-			concerned_list.sort(key=n_pr_pval.get,reverse=True)
-			logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
-			# we now have the sorted list of products based on their probabilities  not in all_suggestions
-			if len(concerned_list) > 0: 
-				current_product=concerned_list[0]
-				return 0
-			
-		else:
-			# show a random product to build user profile
-			# or show a product from the top/least number of inputs				
-			logger.info('NOW showing random product as user inputs were not enough')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for random product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('random probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-	logger.info('Fn: update_current_product() exited with return value None')
-
+	concerned_list.sort(key=n_pr_pval.get,reverse=True)
+	logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
+	# we now have the sorted list of products based on their probabilities  not in all_suggestions
+	if len(concerned_list) > 0: 
+		current_product=concerned_list[0]
+		return 0
+	return 1
+	
 # nearest user method
-def trial2():
+def model2():
 
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
@@ -496,210 +503,57 @@ def trial2():
 	global trending_set,fallback_set
 	logger.info('Fn: update_current_product() called')
 	
-	if len(n_users) <1 :
-		#show trending products
-		logger.info('No previous dataset of users,show trending products')
-		probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
-		logger.info('Probable set is %s',repr(probable_set))
+	#the user has put in atleast 2 inputs till now
+	logger.info('user input is greater than 2. calculating similarity values')
+	for elem in n_users:
+		calc_val=0				
+		# jaccard index calculation
+		calc_val+= len(n_users_lset[elem] & current_set_l)
+		calc_val+= len(n_users_dset[elem] & current_set_d)
+		logger.info('The agreement total for user %d is %d',elem,calc_val)
 		
-		if len(probable_set) <1:
-			# print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			logger.info('Fn: update_current_product() exited with return value 1')
-			return 1
-		else:
-			current_product=random.sample(probable_set,1)[0]
-			logger.info('current product value is %d',current_product)
-			logger.info('Fn: update_current_product() exited with return value 0')
-			return 0
-	else:
-		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
-			#the user has put in atleast 2 inputs till now
-			logger.info('user input is greater than 2. calculating similarity values')
-			for elem in n_users:
-				calc_val=0				
-				# jaccard index calculation
-				calc_val+= len(n_users_lset[elem] & current_set_l)
-				calc_val+= len(n_users_dset[elem] & current_set_d)
-				logger.info('The agreement total for user %d is %d',elem,calc_val)
-				
-				calc_val-= len(n_users_lset[elem] & current_set_d)
-				calc_val-= len(n_users_dset[elem] & current_set_l)
-				logger.info('The numerator value for user %d is %d',elem,calc_val)
-				
-				logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-				calc_val/= (len(current_set_d)+len(current_set_l))
-				logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-				n_users_jset[elem]=calc_val;
-			
-							
-			# for all nearest neighbours in descending order of similarity index
-			nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
-			logger.info('Nearest users order is %s',repr(nearest_order))
-			for elem in nearest_order:
-				# try their like set
-				probable_set=set((n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)))
-				logger.info('Probable set with user %d is %s',elem,repr(probable_set))
-				if len(probable_set)>0:
-					current_product=random.sample(probable_set,1)[0] #choose any one from nearest user's like set
-					logger.info('current_product is set to %d',current_product)
-					logger.info('Fn: update_current_product() exited with return value 0')
-					return 0
-			
-			#if reached here, means in loop anywhere we could not find a product,show user more products from the fallback set 
-			# show a fallback product to build better user profile
-			logger.info('NOW showing fallback product, no user product matched')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for fallback product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('fallback probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-			''' OLD '''
-		else:
-			# show a fallback product to build user profile
-			# or show a product from the top/least number of inputs				
-			logger.info('NOW showing fallback product as user inputs were not enough')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for fallback product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('fallback probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-	logger.info('Fn: update_current_product() exited with return value None')
-
-#item-item similarity
-def trial3():
-	"""
-	Returns 0 for a successful attempt, else returns 1 and prints the error message
-	"""
-	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	logger.info('Fn: update_current_product() called')
+		calc_val-= len(n_users_lset[elem] & current_set_d)
+		calc_val-= len(n_users_dset[elem] & current_set_l)
+		logger.info('The numerator value for user %d is %d',elem,calc_val)
+		
+		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
+		calc_val/= (len(current_set_d)+len(current_set_l))
+		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
+		n_users_jset[elem]=calc_val;
 	
-	if len(n_users) <1 :
-		#show trending products
-		logger.info('No previous dataset of users,show trending products')
-		probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
-		logger.info('Probable set is %s',repr(probable_set))
-		
-		if len(probable_set) <1:
-			# print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			logger.info('Fn: update_current_product() exited with return value 1')
-			return 1
-		else:
-			current_product=random.sample(probable_set,1)[0]
-			logger.info('current product value is %d',current_product)
-			logger.info('Fn: update_current_product() exited with return value 0')
-			return 0
-	else:
-		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
-			#the user has put in atleast 2 inputs till now
-			logger.info('user input is greater than 2. calculating similarity values')
-			for elem in n_users:
-				calc_val=0					
-				# jaccard index calculation
-				calc_val+= len(n_users_lset[elem] & current_set_l)
-				calc_val+= len(n_users_dset[elem] & current_set_d)
-				logger.info('The agreement total for user %d is %d',elem,calc_val)
-				
-				calc_val-= len(n_users_lset[elem] & current_set_d)
-				calc_val-= len(n_users_dset[elem] & current_set_l)
-				logger.info('The numerator value for user %d is %d',elem,calc_val)
-				
-				logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-				calc_val/= (len(current_set_d)+len(current_set_l))
-				logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-				n_users_jset[elem]=calc_val;
-			
-			# take only those that user has not seen for calc probabilities.
-			concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
-
-			for elem in concerned_list:
-				calc_val=0
-				for val in n_pr_lset[elem]:
-					calc_val+= n_users_jset[val]
-				for val in n_pr_dset[elem]:
-					calc_val-= n_users_jset[val]
-
-				if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
-					n_pr_pval[elem]=-1000000
-				else:
-					calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
-					n_pr_pval[elem]=calc_val
 					
-			concerned_list.sort(key=n_pr_pval.get,reverse=True)
-			logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
-			# we now have the sorted list of products based on their probabilities  not in all_suggestions
-			if len(concerned_list) > 0: 
-				current_product=concerned_list[0]
-				return 0
-			
-			''' OLD '''				
-			#for all nearest neighbours in descending order of similarity index
-			# nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
-			# logger.info('Nearest users order is %s',repr(nearest_order))
-			# for elem in nearest_order:
-			# 	# try their like set
-			# 	probable_set=set((n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)))
-			# 	logger.info('Probable set with user %d is %s',elem,repr(probable_set))
-			# 	if len(probable_set)>0:
-			# 		current_product=random.sample(probable_set,1)[0] #choose any one from nearest user's like set
-			# 		logger.info('current_product is set to %d',current_product)
-			# 		logger.info('Fn: update_current_product() exited with return value 0')
-			# 		return 0
-			
-			# #if reached here, means in loop anywhere we could not find a product,show user more products from the random set 
-			# # show a random product to build better user profile
-			# logger.info('NOW showing random product, no user product matched')
-			# probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			# logger.info('Probable set for random product is %s',repr(probable_set))
-			# if len(probable_set) <1:
-			# 	print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			# 	logger.info('random probable set size was less than 1')
-			# 	logger.info('Fn: update_current_product() exited with return value 1')
-			# 	return 1
-			# else:
-			# 	current_product=random.sample(probable_set,1)[0]
-			# 	logger.info('current_product is set to %d',current_product)
-			# 	logger.info('Fn: update_current_product() exited with return value 0')
-			# 	return 0
-			''' OLD '''
-		else:
-			# show a random product to build user profile
-			# or show a product from the top/least number of inputs				
-			logger.info('NOW showing random product as user inputs were not enough')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for random product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('random probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-	logger.info('Fn: update_current_product() exited with return value None')
-
-# calc aggregate product based on nearest users 
-def trial4():
+	# for all nearest neighbours in descending order of similarity index
+	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
+	logger.info('Nearest users order is %s',repr(nearest_order))
+	for elem in nearest_order:
+		# try their like set
+		probable_set=set((n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)))
+		logger.info('Probable set with user %d is %s',elem,repr(probable_set))
+		if len(probable_set)>0:
+			current_product=random.sample(probable_set,1)[0] #choose any one from nearest user's like set
+			logger.info('current_product is set to %d',current_product)
+			logger.info('Fn: update_current_product() exited with return value 0')
+			return 0
+	
+	#if reached here, means in loop anywhere we could not find a product,show user more products from the fallback set 
+	# show a fallback product to build better user profile
+	logger.info('NOW showing fallback product, no user product matched')
+	probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
+	logger.info('Probable set for fallback product is %s',repr(probable_set))
+	if len(probable_set) <1:
+		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+		logger.info('fallback probable set size was less than 1')
+		logger.info('Fn: update_current_product() exited with return value 1')
+		return 1
+	else:
+		current_product=random.sample(probable_set,1)[0]
+		logger.info('current_product is set to %d',current_product)
+		logger.info('Fn: update_current_product() exited with return value 0')
+		return 0
+	''' OLD '''
+	
+#item-item similarity
+def model3():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
@@ -708,93 +562,111 @@ def trial4():
 	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
 	global trending_set,fallback_set
 	logger.info('Fn: update_current_product() called')
-	
-	if len(n_users) <1 :
-		#show trending products
-		logger.info('No previous dataset of users,show trending products')
-		probable_set=set((trending_set - (current_set_d | current_set_l | all_suggestions)))
-		logger.info('Probable set is %s',repr(probable_set))
 		
-		if len(probable_set) <1:
-			# print('Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-			logger.info('Fn: update_current_product() exited with return value 1')
-			return 1
+	#the user has put in atleast 2 inputs till now
+	logger.info('user input is greater than 2. calculating similarity values')
+	for elem in n_users:
+		calc_val=0					
+		# jaccard index calculation
+		calc_val+= len(n_users_lset[elem] & current_set_l)
+		calc_val+= len(n_users_dset[elem] & current_set_d)
+		logger.info('The agreement total for user %d is %d',elem,calc_val)
+		
+		calc_val-= len(n_users_lset[elem] & current_set_d)
+		calc_val-= len(n_users_dset[elem] & current_set_l)
+		logger.info('The numerator value for user %d is %d',elem,calc_val)
+		
+		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
+		calc_val/= (len(current_set_d)+len(current_set_l))
+		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
+		n_users_jset[elem]=calc_val;
+	
+	# take only those that user has not seen for calc probabilities.
+	concerned_list = list(set(n_products) - (current_set_d | current_set_l | all_suggestions) )
+
+	for elem in concerned_list:
+		calc_val=0
+		for val in n_pr_lset[elem]:
+			calc_val+= n_users_jset[val]
+		for val in n_pr_dset[elem]:
+			calc_val-= n_users_jset[val]
+
+		if (len(n_pr_lset[elem]) + len(n_pr_dset[elem])) <1:
+			n_pr_pval[elem]=-1000000
 		else:
-			current_product=random.sample(probable_set,1)[0]
-			logger.info('current product value is %d',current_product)
-			logger.info('Fn: update_current_product() exited with return value 0')
-			return 0
+			calc_val/= (len(n_pr_lset[elem]) + len(n_pr_dset[elem]))
+			n_pr_pval[elem]=calc_val
+			
+	concerned_list.sort(key=n_pr_pval.get,reverse=True)
+	logger.info('The sorted list of products is %s',repr([(elem,n_pr_pval[elem]) for elem in concerned_list]))
+	# we now have the sorted list of products based on their probabilities  not in all_suggestions
+	if len(concerned_list) > 0: 
+		current_product=concerned_list[0]
+		return 0
+	return 1
+				
+# calc aggregate product based on nearest users 
+def model4():
+	"""
+	Returns 0 for a successful attempt, else returns 1 and prints the error message
+	"""
+	global logger
+	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
+	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
+	global trending_set,fallback_set
+	logger.info('Fn: model4() called')
+	
+	#the user has put in atleast 2 inputs till now
+	logger.info('user input is greater than 2. calculating similarity values')
+	for elem in n_users:
+		calc_val=0					
+		# jaccard index calculation
+		calc_val+= len(n_users_lset[elem] & current_set_l)
+		calc_val+= len(n_users_dset[elem] & current_set_d)
+		logger.info('The agreement total for user %d is %d',elem,calc_val)
+		
+		calc_val-= len(n_users_lset[elem] & current_set_d)
+		calc_val-= len(n_users_dset[elem] & current_set_l)
+		logger.info('The numerator value for user %d is %d',elem,calc_val)
+		
+		logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
+		calc_val/= (len(current_set_d)+len(current_set_l))
+		logger.info('The similarity value for user %d is %.4f',elem,calc_val)
+		n_users_jset[elem]=calc_val;
+	
+	# for all nearest neighbours in descending order of similarity index
+	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
+	logger.info('Nearest users order is %s',repr(nearest_order))
+	probable_dict=dict()
+	# take the product with most frequency in nearest 5 users
+	for elem in nearest_order[0:5]:
+		for each in (n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)):
+			probable_dict[each]=probable_dict.get(each,0)+1
+	logger.info('pdd dict is %s',repr(probable_dict))
+	pdd=sorted(probable_dict, key=probable_dict.get,reverse=True)
+	logger.info('pdd is %s',repr(pdd))
+	if len(pdd)>0:
+		current_product=pdd[0] #choose any one from nearest user's like set
+		logger.info('current_product is set to %d',current_product)
+		logger.info('Fn: update_current_product() exited with return value 0')
+		return 0
+	
+	#if reached here. product not found
+	# show a random product to build better user profile
+	logger.info('NOW showing random product, no user product matched')
+	probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
+	logger.info('Probable set for random product is %s',repr(probable_set))
+	if len(probable_set) <1:
+		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+		logger.info('random probable set size was less than 1')
+		logger.info('Fn: update_current_product() exited with return value 1')
+		return 1
 	else:
-		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
-			#the user has put in atleast 2 inputs till now
-			logger.info('user input is greater than 2. calculating similarity values')
-			for elem in n_users:
-				calc_val=0					
-				# jaccard index calculation
-				calc_val+= len(n_users_lset[elem] & current_set_l)
-				calc_val+= len(n_users_dset[elem] & current_set_d)
-				logger.info('The agreement total for user %d is %d',elem,calc_val)
-				
-				calc_val-= len(n_users_lset[elem] & current_set_d)
-				calc_val-= len(n_users_dset[elem] & current_set_l)
-				logger.info('The numerator value for user %d is %d',elem,calc_val)
-				
-				logger.info('The denominator value for user %d is %d',elem,(len(current_set_d)+len(current_set_l)))
-				calc_val/= (len(current_set_d)+len(current_set_l))
-				logger.info('The similarity value for user %d is %.4f',elem,calc_val)
-				n_users_jset[elem]=calc_val;
-			
-			# for all nearest neighbours in descending order of similarity index
-			nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
-			logger.info('Nearest users order is %s',repr(nearest_order))
-			probable_dict=dict()
-			# take the product with most frequency in nearest 5 users
-			for elem in nearest_order[0:5]:
-				for each in (n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)):
-					probable_dict[each]=probable_dict.get(each,0)+1
-			logger.info('pdd dict is %s',repr(probable_dict))
-			pdd=sorted(probable_dict, key=probable_dict.get,reverse=True)
-			logger.info('pdd is %s',repr(pdd))
-			if len(pdd)>0:
-				current_product=pdd[0] #choose any one from nearest user's like set
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-			
-			#if reached here. product not found
-			# show a random product to build better user profile
-			logger.info('NOW showing random product, no user product matched')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for random product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('random probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-			
-		else:
-			# show a random product to build user profile
-			# or show a product from the top/least number of inputs				
-			logger.info('NOW showing random product as user inputs were not enough')
-			probable_set=set((fallback_set - (current_set_d | current_set_l | all_suggestions)))
-			logger.info('Probable set for random product is %s',repr(probable_set))
-			if len(probable_set) <1:
-				print('2Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
-				logger.info('random probable set size was less than 1')
-				logger.info('Fn: update_current_product() exited with return value 1')
-				return 1
-			else:
-				current_product=random.sample(probable_set,1)[0]
-				logger.info('current_product is set to %d',current_product)
-				logger.info('Fn: update_current_product() exited with return value 0')
-				return 0
-	logger.info('Fn: update_current_product() exited with return value None')
+		current_product=random.sample(probable_set,1)[0]
+		logger.info('current_product is set to %d',current_product)
+		logger.info('Fn: update_current_product() exited with return value 0')
+		return 0
+		
 
 #  START of APPLICATION
 '''
