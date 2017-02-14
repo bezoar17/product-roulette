@@ -45,7 +45,7 @@ def populate_user_details():
 ''' FUNCTION DECLARATIONS'''
 
 # testing parameters
-model_nos=[2]
+model_nos=[2,4]
 iterations=3
 nsuggestions_peruser=20
 test_set_size=5
