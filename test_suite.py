@@ -47,7 +47,7 @@ def populate_user_details():
 # testing parameters
 model_nos=[1,2,3]
 iterations=10
-nsuggestions_peruser=25
+nsuggestions_peruser=20
 test_set_size=5
 
 # results 
@@ -88,7 +88,7 @@ for model_no in model_nos:
 			
 			for i in range(nsuggestions_peruser):
 				suggestion=pr.getProduct() 			# get the suggestion(product id) for the user
-				# print(suggestion,'suggested to',elem[1])
+				print(suggestion,'suggested to',elem[1])
 				if suggestion == None:
 					# print('None suggested')
 					none_count+=1
