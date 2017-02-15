@@ -2,3 +2,4 @@
 *.xlsx
 complete.xlsm
 app.log
+*.pyc
