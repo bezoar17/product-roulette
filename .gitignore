@@ -1,0 +1,6 @@
+*.csv
+complete.xlsm
+*.xlsx
+*.log
+__pycache__/product_roulette.cpython-35.pyc
+*.pyc
