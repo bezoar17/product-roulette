@@ -324,7 +324,7 @@ def populate_previous_data():
 			
 			# for all product id's 1 to 249 calc the respective similarity values
 			for iterval in range(1,len(n_products)+1):
-					fill_similarities(iterval)		
+				fill_similarities(iterval)		
 			pass
 		
 		templist=list()
@@ -388,7 +388,6 @@ def end():
 	logging.shutdown()
 ''' FUNCTION DEFINITIONS END'''
 
-
 ''' MODEL FUNCTIONS '''
 # returns a product from the set , else returns None (can set preference =1 for most liked product or = for random pick)
 def pick_product(set_name,preferred=0):
@@ -428,6 +427,7 @@ def calc_user_similarity(user_elem):
 	return calc_val
 
 # calculates the pval for product product_elem
+#FOR MODEL 1
 def calc_pval(product_elem):
 	
 	global n_pr_lset,n_pr_dset,n_users_jset
@@ -513,12 +513,14 @@ def model2():
 		fall_back_count+=1
 		return 0
 	
-# calc similarity with users, sort acc to similarity , pick most popular product in 5 nearest users
+# calc similarity with users, sort acc to similarity , pick most popular product in k_nearest nearest users
 def model3():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger,current_product,n_users,n_users_jset,current_set_l,current_set_d,fallback_set,fall_back_count
+	
+	k_nearest=5  # local variable
 	
 	# calculate similarity values with every user
 	for elem in n_users:
@@ -528,9 +530,9 @@ def model3():
 	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
 	logger.info('Nearest users order is %s',repr(nearest_order))
 		
-	# calculate frequency of products in 5 nearest users
+	# calculate frequency of products in k_nearest nearest users
 	product_freq=dict()
-	for elem in nearest_order[0:5]:
+	for elem in nearest_order[0:k_nearest]:
 		for each in (n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)):
 			product_freq[each]=product_freq.get(each,0)+1
 	logger.info('product frequency dict is %s',repr(product_freq))
@@ -587,12 +589,49 @@ def fill_similarities(product_sim_elem,updating=0):
 		
 	pass
 
-# FOR MODEEL 4 , function calculates item similarity	
+# FOR MODEEL 4 , function calculates item similarity	(try multiple methods)
 def calc_item_similarity(item_no1,item_no2):
 	# calculate the similarity distances between the products 
+	# modified jaccard for items too
+	
+	global n_pr_lset,n_pr_dset
+	
+	calc_val = 0 # local variable
+	
+	calc_val+= len( n_pr_lset[item_no1] & n_pr_lset[item_no2] )
+	calc_val+= len( n_pr_dset[item_no1] & n_pr_dset[item_no2] )	
+	calc_val-= len( n_pr_lset[item_no1] & n_pr_dset[item_no2] )
+	calc_val-= len( n_pr_dset[item_no1] & n_pr_lset[item_no2] )
+	calc_val/= len( n_pr_dset[item_no1] | n_pr_dset[item_no2] | n_pr_lset[item_no1] | n_pr_lset[item_no2] )
+	
+	return calc_val
+
 	pass
 
-# item-item similarity method
+# FOR MODEL 4 , calculate prediction value
+def calc_pval_model4(product_elem):
+	
+	global logger
+	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
+	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
+	global trending_set,fallback_set,item_item_sim_matrix
+	
+	# every product which comes here has a value in item mattrix current_set_l,elem check none value too . (take av maybe)
+	calc_val=0  # local variable
+	
+	# add similarity values with like set
+	for each in current_set_l:
+		if item_item_sim_matrix[product_elem][each] != None:
+			calc_val+=item_item_sim_matrix[product_elem][each]
+	
+	# subtract similarity values with dislike set
+	#for each in current_set_d:
+	#	calc_val-=item_item_sim_matrix[product_elem][each]
+		
+	return calc_val
+	pass
+# item-item similarity method    k_nearest items 
+# explain the method 
 def model4():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
@@ -600,7 +639,38 @@ def model4():
 	global logger
 	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
 	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
+	global trending_set,fallback_set,item_item_sim_matrix
+	
+	k_nearest = 5  # local variable
+	similar_products_set=set()  #local variable
+	
+	# for each item in current user's like set find N similar items and take union and then calc similarities of this set with user's like set and pick best 
+	for each in current_set_l:
+		temp_list = [(i,item_item_sim_matrix[each][i]) for i in range(1,250) if (item_item_sim_matrix[each][i]!=None and (i not in set(current_set_l | current_set_d | all_suggestions)))]   # get list of (item-id,similarity) for this item
+		temp_list.sort(key=lambda tup: tup[1],reverse=True)
+		if len(temp_list) > k_nearest:
+			temp_list=temp_list[0:k_nearest]
+		similar_products_set |= set([i[0] for i in temp_list])
+	
+	#calculate prediction similarity for each product
+	for elem in similar_products_set:
+		n_pr_pval[elem]=calc_pval_model4(elem)
+		
+	# sort products according to pval and pick product with best pval
+	if len(similar_products_set) > 0: 
+		current_product=sorted(similar_products_set,key=n_pr_pval.get,reverse=True)[0]
+		return 0
+	
+	#if reached here, we could not find a product,show user more products from the fallback set 
+	current_product=pick_product(fallback_set)
+	if current_product == None:
+		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+		return 1
+	else:
+		logger.info('current_product is set to %d',current_product)
+		fall_back_count+=1
+		return 0
+	
 	pass
 
 def model5():
