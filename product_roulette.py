@@ -201,7 +201,7 @@ def get_user_id():
 
 		# #like set
 		# tcursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(t_user_id,))
-		# current_set_l=set(random.sample([i[0] for i in tcursor.fetchall()],4))
+		# current_set_l=set(random.sample([i[0] for i in tcursor.fetchall()],2))
 		# logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
 		# tdb.commit()
 		# tdb.close()
@@ -225,7 +225,7 @@ def update_current_product():
 			return 0
 	else:
 		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
+		if (len(current_set_d)+len(current_set_l)) > 1:
 			if model_value==1:
 				return model1()
 			elif model_value==2:
@@ -567,7 +567,8 @@ def fill_similarities(product_sim_elem,updating=0):
 	all_related_products_set=set()			# local variable
 	# for all user's who gave input for this product 
 	for each in (n_pr_lset[product_sim_elem] | n_pr_dset[product_sim_elem]):
-		all_related_products_set |= n_users_lset[each] | n_users_dset[each]
+		if each!=user_id:
+			all_related_products_set |= n_users_lset[each] | n_users_dset[each]
 	
 	for each in all_related_products_set:
 		if updating == 0:				# first time initialization of item similarity matrix
@@ -599,10 +600,10 @@ def calc_item_similarity(item_no1,item_no2):
 	calc_val = 0 # local variable
 	
 	calc_val+= len( n_pr_lset[item_no1] & n_pr_lset[item_no2] )
-	calc_val+= len( n_pr_dset[item_no1] & n_pr_dset[item_no2] )	
-	calc_val-= len( n_pr_lset[item_no1] & n_pr_dset[item_no2] )
-	calc_val-= len( n_pr_dset[item_no1] & n_pr_lset[item_no2] )
-	calc_val/= len( n_pr_dset[item_no1] | n_pr_dset[item_no2] | n_pr_lset[item_no1] | n_pr_lset[item_no2] )
+	# calc_val+= len( n_pr_dset[item_no1] & n_pr_dset[item_no2] )	
+	# calc_val-= len( n_pr_lset[item_no1] & n_pr_dset[item_no2] )
+	# calc_val-= len( n_pr_dset[item_no1] & n_pr_lset[item_no2] )
+	# calc_val/= len( n_pr_dset[item_no1] | n_pr_dset[item_no2] | n_pr_lset[item_no1] | n_pr_lset[item_no2] )
 	
 	return calc_val
 
@@ -625,8 +626,9 @@ def calc_pval_model4(product_elem):
 			calc_val+=item_item_sim_matrix[product_elem][each]
 	
 	# subtract similarity values with dislike set
-	#for each in current_set_d:
-	#	calc_val-=item_item_sim_matrix[product_elem][each]
+	for each in current_set_d:
+		if item_item_sim_matrix[product_elem][each] != None:
+			calc_val-=item_item_sim_matrix[product_elem][each]
 		
 	return calc_val
 	pass
@@ -639,7 +641,7 @@ def model4():
 	global logger
 	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
 	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set,item_item_sim_matrix
+	global trending_set,fallback_set,item_item_sim_matrix,fall_back_count
 	
 	k_nearest = 5  # local variable
 	similar_products_set=set()  #local variable
