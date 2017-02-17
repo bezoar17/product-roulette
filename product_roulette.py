@@ -7,7 +7,6 @@ target=open('app.log','w')
 target.close()
 
 '''Logging setup'''
-
 logging.StreamHandler(stream=None)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,7 +21,6 @@ handler.setFormatter(formatter)
 
 # add the handlers to the logger
 logger.addHandler(handler)
-
 '''Logging setup'''
 
 ''' GLOBALS FOR MODULE '''
@@ -59,8 +57,6 @@ cursor=None
 model_value=None
 fall_back_count=None
 item_item_sim_matrix=None		# for model 4, zero based but 0 has empty list
-
-
 ''' GLOBALS FOR MODULE '''
 
 ''' FUNCTION DEFINITIONS START'''
@@ -366,10 +362,10 @@ def set_user_input(arg1):
 
 def getProduct():
 	showProduct()
-	return current_product
+	return current_product # global can be used directly,if not assigned
 
 def start(model_no=4):
-	global db,cursor,logger,handler,model_value,fall_back_count,valid_choice
+	global db,cursor,logger,model_value,fall_back_count,valid_choice
 	#connect to db
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
@@ -379,14 +375,13 @@ def start(model_no=4):
 	valid_choice=1
 
 def end():
-	global db,cursor
+	global db,logger
 	
 	set_user_input(0) # will set menu_val and push_user_data_to_db()
 	
 	db.commit() #make sure any pending transactions are comitted
 	db.close() #close db
 	logger.info('DB committed and closed')
-
 	logger.info('Exited application')
 	logging.shutdown()
 ''' FUNCTION DEFINITIONS END'''
@@ -563,9 +558,8 @@ def fill_similarities(product_sim_elem,updating=0):
 	# for updating = 0 , copy if mirror is not None.
 	# for updating = 1 , update the mirror also.
 	
-	global logger
-	global db,cursor,n_users_lset,n_users_dset,n_users_jset,n_users,trending_set,user_persona,fallback_set,user_id
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset,all_suggestions,model_value,item_item_sim_matrix
+	global n_users_lset,n_users_dset,user_id
+	global n_pr_dset,n_pr_lset,item_item_sim_matrix
 	
 	all_related_products_set=set()			# local variable
 	# for all user's who gave input for this product 
@@ -615,10 +609,7 @@ def calc_item_similarity(item_no1,item_no2):
 # FOR MODEL 4 , calculate prediction value
 def calc_pval_model4(product_elem):
 	
-	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set,item_item_sim_matrix
+	global current_set_l,current_set_d,item_item_sim_matrix
 	
 	# every product which comes here has a value in item mattrix current_set_l,elem check none value too . (take av maybe)
 	calc_val=0  # local variable
@@ -642,9 +633,9 @@ def model4():
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set,item_item_sim_matrix,fall_back_count
+	global current_product,current_set_l,current_set_d
+	global n_pr_pval
+	global fallback_set,item_item_sim_matrix,fall_back_count
 	
 	k_nearest = 5  # local variable
 	similar_products_set=set()  #local variable
