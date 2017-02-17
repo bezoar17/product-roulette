@@ -7,7 +7,6 @@ target=open('app.log','w')
 target.close()
 
 '''Logging setup'''
-
 logging.StreamHandler(stream=None)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,7 +21,6 @@ handler.setFormatter(formatter)
 
 # add the handlers to the logger
 logger.addHandler(handler)
-
 '''Logging setup'''
 
 ''' GLOBALS FOR MODULE '''
@@ -35,19 +33,30 @@ user_email=None
 user_persona=None
 current_product=None
 current_product_name=None
+all_suggestions=None
+
 n_users=None
 n_users_lset=None
 n_users_dset=None
 n_users_jset=None
+
+n_products=None
+n_pr_dset=None
+n_pr_lset=None
+n_pr_pval=None
+
 trending_set=None
 fallback_set=None
+
 valid_choice=None
 menu_val=None
 db=None
 cursor=None
-all_suggestions=None
+
+
 model_value=None
 fall_back_count=None
+item_item_sim_matrix=None		# for model 4, zero based but 0 has empty list
 ''' GLOBALS FOR MODULE '''
 
 ''' FUNCTION DEFINITIONS START'''
@@ -60,7 +69,6 @@ def showProduct():
 	Description: 
 		If function is called with valid_choice=0(happens after wrong user input)
 		the function just shows the name for the current_product(id)
-
 		When called with valid_choice=1, it calls update_current_product().
 		IF the update function is successful,it prints the name of current_product
 		ELSE sets current_product=None
@@ -88,17 +96,27 @@ def showProduct():
 
 def update_new_input():
 	""" Add the liked/disliked item in the user's like/dislike set """
+	''' Add the user in the product's likes/dislike set too !!!'''
+	
 	global logger
 	global current_set_l, current_set_d, current_product, menu_val,new_set_l,new_set_d
+	global n_pr_dset,n_pr_lset,model_value
 	
 	if menu_val == 'y':
 		current_set_l.add(current_product)
 		new_set_l.add(current_product)
+		n_pr_lset[current_product].add(user_id)
 		logger.info('%d added to like set of current user, like set size:%d',current_product,len(current_set_l))
 	elif menu_val == 'n':
 		current_set_d.add(current_product)
 		new_set_d.add(current_product)
+		n_pr_dset[current_product].add(user_id)
 		logger.info('%d added to dislike set of current user, dislike set size:%d',current_product,len(current_set_d))
+	
+	''' Update the item similarity matrix if proper model_no is active '''
+	if model_value == 4:
+		fill_similarities(current_product,1)     # update the similarities for all product related to current_product
+		pass
 
 def push_user_data_to_db():
 	"""	Push the new like/dislike data collected for the current user to the DB	"""
@@ -125,7 +143,6 @@ def get_user_id():
 	Description:
 		If user_persona is not None(indicates user has to be added to DB) when this function is called,
 		the user is added to the DB and unique user id is fetched.
-
 		If user_persona is None(indicates user has to be checked in DB) when this function is called,
 		user email is checked in DB, if not found user_id is set to None and function returns.
 		and if found, the like & dislike set for the user are also updated from DB.
@@ -180,7 +197,7 @@ def get_user_id():
 
 		# #like set
 		# tcursor.execute('''SELECT product_id FROM user_inputs_table WHERE user_id=? AND input_val=1''',(t_user_id,))
-		# current_set_l=set(random.sample([i[0] for i in tcursor.fetchall()],4))
+		# current_set_l=set(random.sample([i[0] for i in tcursor.fetchall()],2))
 		# logger.info('Like set for user %d is %s',user_id,repr(current_set_l))
 		# tdb.commit()
 		# tdb.close()
@@ -204,7 +221,7 @@ def update_current_product():
 			return 0
 	else:
 		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 2:
+		if (len(current_set_d)+len(current_set_l)) > 1:
 			if model_value==1:
 				return model1()
 			elif model_value==2:
@@ -233,7 +250,7 @@ def populate_previous_data():
 		"""
 		global logger
 		global db,cursor,n_users_lset,n_users_dset,n_users_jset,n_users,trending_set,user_persona,fallback_set,user_id
-		global n_products,n_pr_dset,n_pr_pval,n_pr_lset,all_suggestions
+		global n_products,n_pr_dset,n_pr_pval,n_pr_lset,all_suggestions,model_value,item_item_sim_matrix
 				
 		# users data
 		n_users_lset=dict()
@@ -296,6 +313,16 @@ def populate_previous_data():
 			#initialize the similarity index value
 			n_users_jset[elem]=None
 		
+		# calculate the item item similarity matrix for model 4, maybe build fallback set based on similarity values
+		if model_value == 4:
+			# initialize item similarity matrix [250x250] to None
+			item_item_sim_matrix = [ ([None] * (len(n_products)+1)) for row in range((len(n_products)+1)) ]
+			
+			# for all product id's 1 to 249 calc the respective similarity values
+			for iterval in range(1,len(n_products)+1):
+				fill_similarities(iterval)		
+			pass
+		
 		templist=list()
 		templist=[(elem,len(n_pr_lset[elem])) for elem in n_products]
 		templist.sort(key=lambda tup: tup[1],reverse=True)
@@ -329,34 +356,35 @@ def set_user_input(arg1):
 		menu_val='y';update_new_input()
 	elif arg1 == -1:
 		menu_val='n';update_new_input()
-	else :
+	else:
 		menu_val='e'
 		push_user_data_to_db()	
 
 def getProduct():
 	showProduct()
-	return current_product
+	return current_product # global can be used directly,if not assigned
 
 def start(model_no=4):
-	global db,cursor,logger,handler,model_value,fall_back_count
+	global db,cursor,logger,model_value,fall_back_count,valid_choice
 	#connect to db
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
 	logger.info('Connected to db')
 	model_value=model_no
 	fall_back_count=0
+	valid_choice=1
 
 def end():
-	global db,cursor
-
+	global db,logger
+	
+	set_user_input(0) # will set menu_val and push_user_data_to_db()
+	
 	db.commit() #make sure any pending transactions are comitted
 	db.close() #close db
 	logger.info('DB committed and closed')
-
 	logger.info('Exited application')
 	logging.shutdown()
 ''' FUNCTION DEFINITIONS END'''
-
 
 ''' MODEL FUNCTIONS '''
 # returns a product from the set , else returns None (can set preference =1 for most liked product or = for random pick)
@@ -397,6 +425,7 @@ def calc_user_similarity(user_elem):
 	return calc_val
 
 # calculates the pval for product product_elem
+#FOR MODEL 1
 def calc_pval(product_elem):
 	
 	global n_pr_lset,n_pr_dset,n_users_jset
@@ -482,12 +511,14 @@ def model2():
 		fall_back_count+=1
 		return 0
 	
-# calc similarity with users, sort acc to similarity , pick most popular product in 5 nearest users
+# calc similarity with users, sort acc to similarity , pick most popular product in k_nearest nearest users
 def model3():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger,current_product,n_users,n_users_jset,current_set_l,current_set_d,fallback_set,fall_back_count
+	
+	k_nearest=5  # local variable
 	
 	# calculate similarity values with every user
 	for elem in n_users:
@@ -497,9 +528,9 @@ def model3():
 	nearest_order=sorted(n_users_jset, key=n_users_jset.get,reverse=True)
 	logger.info('Nearest users order is %s',repr(nearest_order))
 		
-	# calculate frequency of products in 5 nearest users
+	# calculate frequency of products in k_nearest nearest users
 	product_freq=dict()
-	for elem in nearest_order[0:5]:
+	for elem in nearest_order[0:k_nearest]:
 		for each in (n_users_lset[elem] - (current_set_d | current_set_l | all_suggestions)):
 			product_freq[each]=product_freq.get(each,0)+1
 	logger.info('product frequency dict is %s',repr(product_freq))
@@ -522,17 +553,138 @@ def model3():
 		fall_back_count+=1
 		return 0		
 
-#item-item similarity
+# FOR MODEL 4 , function calcs the items which have a input in common and fills those similarities
+def fill_similarities(product_sim_elem,updating=0):
+	# for updating = 0 , copy if mirror is not None.
+	# for updating = 1 , update the mirror also.
+	
+	global n_users_lset,n_users_dset,user_id
+	global n_pr_dset,n_pr_lset,item_item_sim_matrix
+	
+	all_related_products_set=set()			# local variable
+	# for all user's who gave input for this product 
+	for each in (n_pr_lset[product_sim_elem] | n_pr_dset[product_sim_elem]):
+		if each!=user_id:
+			all_related_products_set |= n_users_lset[each] | n_users_dset[each]
+	
+	for each in all_related_products_set:
+		if updating == 0:				# first time initialization of item similarity matrix
+			# if diagonally opposite value is not set,calc and set both ; else set directly from opposite value.
+			if item_item_sim_matrix[each][product_sim_elem] == None :
+				item_item_sim_matrix[product_sim_elem][each]=calc_item_similarity(product_sim_elem,each)
+				item_item_sim_matrix[each][product_sim_elem]=item_item_sim_matrix[product_sim_elem][each]
+			else:
+				item_item_sim_matrix[product_sim_elem][each]=item_item_sim_matrix[each][product_sim_elem]
+		
+		elif updating == 1:
+			# just calculate the similarities for these and update the digonal element
+			item_item_sim_matrix[product_sim_elem][each]=calc_item_similarity(product_sim_elem,each)
+			item_item_sim_matrix[each][product_sim_elem]=item_item_sim_matrix[product_sim_elem][each]
+		
+		#if updating==1 or item_item_sim_matrix[each][product_sim_elem] == None:
+		#	item_item_sim_matrix[product_sim_elem][each]=calc_item_similarity(product_sim_elem,each)
+		#item_item_sim_matrix[each][product_sim_elem]=item_item_sim_matrix[product_sim_elem][each]
+		
+	pass
+
+# FOR MODEEL 4 , function calculates item similarity	(try multiple methods)
+def calc_item_similarity(item_no1,item_no2):
+	# calculate the similarity distances between the products 
+	# modified jaccard for items too
+	
+	global n_pr_lset,n_pr_dset
+	
+	calc_val = 0 # local variable
+	
+	calc_val+= len( n_pr_lset[item_no1] & n_pr_lset[item_no2] )
+	# calc_val+= len( n_pr_dset[item_no1] & n_pr_dset[item_no2] )	
+	# calc_val-= len( n_pr_lset[item_no1] & n_pr_dset[item_no2] )
+	# calc_val-= len( n_pr_dset[item_no1] & n_pr_lset[item_no2] )
+	# calc_val/= len( n_pr_dset[item_no1] | n_pr_dset[item_no2] | n_pr_lset[item_no1] | n_pr_lset[item_no2] )
+	
+	return calc_val
+
+	pass
+
+# FOR MODEL 4 , calculate prediction value
+def calc_pval_model4(product_elem):
+	
+	global current_set_l,current_set_d,item_item_sim_matrix
+	
+	# every product which comes here has a value in item mattrix current_set_l,elem check none value too . (take av maybe)
+	calc_val=0  # local variable
+	
+	# add similarity values with like set
+	for each in current_set_l:
+		if item_item_sim_matrix[product_elem][each] != None:
+			calc_val+=item_item_sim_matrix[product_elem][each]
+	
+	# subtract similarity values with dislike set
+	for each in current_set_d:
+		if item_item_sim_matrix[product_elem][each] != None:
+			calc_val-=item_item_sim_matrix[product_elem][each]
+		
+	return calc_val
+	pass
+# item-item similarity method    k_nearest items 
+# explain the method 
 def model4():
 	"""
 	Returns 0 for a successful attempt, else returns 1 and prints the error message
 	"""
 	global logger
-	global current_product,n_users,n_users_dset,n_users_jset,n_users_lset,current_set_l,current_set_d
-	global n_products,n_pr_dset,n_pr_pval,n_pr_lset
-	global trending_set,fallback_set
-	pass
-		
+	global current_product,current_set_l,current_set_d
+	global n_pr_pval
+	global fallback_set,item_item_sim_matrix,fall_back_count
 	
+	k_nearest = 5  # local variable
+	similar_products_set=set()  #local variable
+	
+	# for each item in current user's like set find N similar items and take union and then calc similarities of this set with user's like set and pick best 
+	for each in current_set_l:
+		temp_list = [(i,item_item_sim_matrix[each][i]) for i in range(1,250) if (item_item_sim_matrix[each][i]!=None and (i not in set(current_set_l | current_set_d | all_suggestions)))]   # get list of (item-id,similarity) for this item
+		temp_list.sort(key=lambda tup: tup[1],reverse=True)
+		if len(temp_list) > k_nearest:
+			temp_list=temp_list[0:k_nearest]
+		similar_products_set |= set([i[0] for i in temp_list])
+	
+	#calculate prediction similarity for each product
+	for elem in similar_products_set:
+		n_pr_pval[elem]=calc_pval_model4(elem)
+		
+	# sort products according to pval and pick product with best pval
+	if len(similar_products_set) > 0: 
+		current_product=sorted(similar_products_set,key=n_pr_pval.get,reverse=True)[0]
+		return 0
+	
+	#if reached here, we could not find a product,show user more products from the fallback set 
+	current_product=pick_product(fallback_set)
+	if current_product == None:
+		print('1Phew!! we are all exhausted here, thank you for your inputs. See you next time.')
+		return 1
+	else:
+		logger.info('current_product is set to %d',current_product)
+		fall_back_count+=1
+		return 0
+	
+	pass
+
+def model5():
+	pass
+
+def model6():
+	pass
+
+def model7():
+	pass
+
+def mode8():
+	pass
+
+def model9():
+	pass
+
+def model10():
+	pass
 				
 ''' MODEL FUNCTIONS '''
