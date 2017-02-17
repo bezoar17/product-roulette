@@ -360,7 +360,7 @@ def set_user_input(arg1):
 		menu_val='y';update_new_input()
 	elif arg1 == -1:
 		menu_val='n';update_new_input()
-	else :
+	else:
 		menu_val='e'
 		push_user_data_to_db()	
 
@@ -369,17 +369,20 @@ def getProduct():
 	return current_product
 
 def start(model_no=4):
-	global db,cursor,logger,handler,model_value,fall_back_count
+	global db,cursor,logger,handler,model_value,fall_back_count,valid_choice
 	#connect to db
 	db=sqlite3.connect('train.db')
 	cursor=db.cursor()
 	logger.info('Connected to db')
 	model_value=model_no
 	fall_back_count=0
+	valid_choice=1
 
 def end():
 	global db,cursor
-
+	
+	set_user_input(0) # will set menu_val and push_user_data_to_db()
+	
 	db.commit() #make sure any pending transactions are comitted
 	db.close() #close db
 	logger.info('DB committed and closed')
