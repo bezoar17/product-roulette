@@ -244,6 +244,8 @@ def update_current_product():
 				fall_back_count+=1
 				return 0
 		
+
+
 def populate_previous_data():
 		""" 
 		Get the list of previous users, their like/dislike set and populate trending and random sets
@@ -331,16 +333,6 @@ def populate_previous_data():
 		logger.info('Fallback set LEN:%d and set is :%s',len(fallback_set),repr(fallback_set))
 
 		return 0
-
-def print_personas():
-	''' Print all the different persona's of products present in the product_info_table '''
-	global cursor
-	cursor.execute('''SELECT DISTINCT persona from product_info_table''')
-	product_personas=set([i[0] for i in cursor.fetchall()])
-	#  print 3 personas in a line
-	# it = iter(product_personas)
-	for elem in product_personas:
-		print(elem)
 
 def set_user(arg1,arg2):
 	
