@@ -11,7 +11,7 @@ test_set_size=5
 
 # results
 csvresults=list()
-csvresults.append(['model_no','iteration','user_email','likes','dislikes','hits','oops','suggestions_given','suggestions_value'])
+csvresults.append(['model_no','iteration','user_email','likes','dislikes','hits','oops','suggestions_given','suggestions_value','fallback count'])
 model_results=dict()
 
 '''GLOBALS ''' 
@@ -58,6 +58,7 @@ for model_no in model_nos:
 	#result calculation variables
 	avg_hit_per_suggestion=0
 	avg_hit_per_like=0
+	users_skipped=0
 		
 	print('Model No.',model_no)
 	
@@ -67,7 +68,8 @@ for model_no in model_nos:
 		
 		popdb.start(test_set_size)  # part the data into training and testing sets
 		populate_user_details()		# populate the details of test users
-
+		
+		
 		for elem in n_users_test:
 			
 			pr.start(model_no)			 # initialize the roulette for current user with model no.
@@ -98,17 +100,21 @@ for model_no in model_nos:
 
 			#calculate result for user
 			n_users_rset_test[elem[0]]=(hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]))
-			csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser])
+			csvresults.append([model_no,iterval+1,elem[1],len(n_users_lset_test[elem[0]]),len(n_users_dset_test[elem[0]]),hits_peruser,oops_peruser,len(n_users_sgset_test[elem[0]]),nsuggestions_peruser,pr.fall_back_count])
 			
-			#precision calculation
-			avg_hit_per_suggestion+=(hits_peruser/len(n_users_sgset_test[elem[0]]))
 			
-			#recall calculation
-			avg_hit_per_like+=(hits_peruser/len(n_users_lset_test[elem[0]]))
+			if (len(pr.all_suggestions)-pr.fall_back_count)<1:
+				users_skipped+=1
+			else:
+				#precision calculation
+				avg_hit_per_suggestion+=(hits_peruser/(len(pr.all_suggestions) -pr.fall_back_count))
+				#recall calculation
+				avg_hit_per_like+=(hits_peruser/len(n_users_lset_test[elem[0]]))
 			
-			print('Fallback count:',pr.fall_back_count,'None count:',none_count,'Hit count:',hits_peruser,'Oops count:',oops_peruser)
+			
+			print('Fallback count:',pr.fall_back_count,'None count:',none_count,'Hit count:',hits_peruser,'Oops count:',oops_peruser,'suggestions:',len(n_users_sgset_test[elem[0]]))
 
-	model_results[model_no]={'precision':(avg_hit_per_suggestion*10)/(iterations*test_set_size),'recall':(avg_hit_per_like*10)/(iterations*test_set_size)}
+	model_results[model_no]={'precision':(avg_hit_per_suggestion*10)/(iterations*test_set_size-users_skipped),'recall':(avg_hit_per_like*10)/(iterations*test_set_size-users_skipped)}
 
 #write results to csv
 with open('results.csv', 'w', newline='') as f:
