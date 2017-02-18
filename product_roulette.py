@@ -668,23 +668,5 @@ def model4():
 		return 0
 	
 	pass
-
-def model5():
-	pass
-
-def model6():
-	pass
-
-def model7():
-	pass
-
-def mode8():
-	pass
-
-def model9():
-	pass
-
-def model10():
-	pass
-				
+		
 ''' MODEL FUNCTIONS '''
