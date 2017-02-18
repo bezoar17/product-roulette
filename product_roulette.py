@@ -221,7 +221,7 @@ def update_current_product():
 			return 0
 	else:
 		#prev data is present, if user input is more than 2
-		if (len(current_set_d)+len(current_set_l)) > 1:
+		if (len(current_set_d)+len(current_set_l)) > 2:
 			if model_value==1:
 				return model1()
 			elif model_value==2:
